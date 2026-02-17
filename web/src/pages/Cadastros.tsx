@@ -23,8 +23,10 @@ export default function Cadastros({ programaId }: Props) {
   const [novoTipo, setNovoTipo] = useState({ nome: '', descricao: '' });
   const [principioEdicao, setPrincipioEdicao] = useState<Principio | null>(null);
   const [criterioEdicao, setCriterioEdicao] = useState<Criterio | null>(null);
+  const [indicadorEdicao, setIndicadorEdicao] = useState<Indicador | null>(null);
   const [edicaoPrincipio, setEdicaoPrincipio] = useState({ codigo: '', titulo: '', descricao: '' });
   const [edicaoCriterio, setEdicaoCriterio] = useState({ principio_id: 0, codigo: '', titulo: '', descricao: '' });
+  const [edicaoIndicador, setEdicaoIndicador] = useState({ criterio_id: 0, codigo: '', titulo: '', descricao: '' });
 
   const principioMap = useMemo(() => new Map(principios.map((p) => [p.id, p])), [principios]);
   const criterioMap = useMemo(() => new Map(criterios.map((c) => [c.id, c])), [criterios]);
@@ -233,6 +235,36 @@ export default function Cadastros({ programaId }: Props) {
     }
   };
 
+  const abrirEdicaoIndicador = (indicador: Indicador) => {
+    setIndicadorEdicao(indicador);
+    setEdicaoIndicador({
+      criterio_id: indicador.criterio_id,
+      codigo: indicador.codigo || '',
+      titulo: indicador.titulo,
+      descricao: indicador.descricao || '',
+    });
+  };
+
+  const salvarEdicaoIndicador = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!indicadorEdicao || !programaId) return;
+    setErro('');
+    try {
+      await api.put(`/indicadores/${indicadorEdicao.id}`, {
+        programa_id: programaId,
+        criterio_id: Number(edicaoIndicador.criterio_id),
+        codigo: edicaoIndicador.codigo || null,
+        titulo: edicaoIndicador.titulo,
+        descricao: edicaoIndicador.descricao || null,
+      });
+      setIndicadorEdicao(null);
+      await carregar();
+      sucesso('Indicador atualizado.');
+    } catch (err) {
+      erroApi(err);
+    }
+  };
+
   return (
     <div className="grid gap-16">
       <h2>Cadastros Base</h2>
@@ -389,9 +421,14 @@ export default function Cadastros({ programaId }: Props) {
             {
               title: 'Ações',
               render: (i) => (
-                <button type="button" onClick={() => remover(`/indicadores/${i.id}`, 'Indicador removido.')}>
-                  Excluir
-                </button>
+                <div className="row-actions">
+                  <button type="button" onClick={() => abrirEdicaoIndicador(i)}>
+                    Editar
+                  </button>
+                  <button type="button" onClick={() => remover(`/indicadores/${i.id}`, 'Indicador removido.')}>
+                    Excluir
+                  </button>
+                </div>
               ),
             },
           ]}
@@ -494,6 +531,48 @@ export default function Cadastros({ programaId }: Props) {
             <input
               value={edicaoCriterio.descricao}
               onChange={(e) => setEdicaoCriterio((state) => ({ ...state, descricao: e.target.value }))}
+            />
+          </FormRow>
+
+          <button type="submit">Salvar Alterações</button>
+        </form>
+      </Modal>
+
+      <Modal open={!!indicadorEdicao} title="Editar Indicador" onClose={() => setIndicadorEdicao(null)}>
+        <form className="grid gap-12" onSubmit={salvarEdicaoIndicador}>
+          <FormRow label="Critério">
+            <select
+              value={edicaoIndicador.criterio_id}
+              onChange={(e) => setEdicaoIndicador((state) => ({ ...state, criterio_id: Number(e.target.value) }))}
+              required
+            >
+              {criterios.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.titulo}
+                </option>
+              ))}
+            </select>
+          </FormRow>
+
+          <FormRow label="Código">
+            <input
+              value={edicaoIndicador.codigo}
+              onChange={(e) => setEdicaoIndicador((state) => ({ ...state, codigo: e.target.value }))}
+            />
+          </FormRow>
+
+          <FormRow label="Título">
+            <input
+              value={edicaoIndicador.titulo}
+              onChange={(e) => setEdicaoIndicador((state) => ({ ...state, titulo: e.target.value }))}
+              required
+            />
+          </FormRow>
+
+          <FormRow label="Descrição">
+            <input
+              value={edicaoIndicador.descricao}
+              onChange={(e) => setEdicaoIndicador((state) => ({ ...state, descricao: e.target.value }))}
             />
           </FormRow>
 
