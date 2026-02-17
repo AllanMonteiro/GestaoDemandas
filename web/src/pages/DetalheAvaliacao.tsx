@@ -362,8 +362,8 @@ export default function DetalheAvaliacao() {
         />
 
         <form className="detalhe-demanda-form" onSubmit={criarDemanda}>
-          <div className="grid four-col gap-12">
-            <label className="form-row">
+          <div className="detalhe-demanda-grid">
+            <label className="form-row demanda-field demanda-titulo">
               <span>Título</span>
               <input
                 placeholder="Título da demanda"
@@ -372,7 +372,7 @@ export default function DetalheAvaliacao() {
                 required
               />
             </label>
-            <label className="form-row">
+            <label className="form-row demanda-field demanda-descricao">
               <span>Descrição</span>
               <input
                 placeholder="Descrição"
@@ -380,25 +380,25 @@ export default function DetalheAvaliacao() {
                 onChange={(e) => setDemanda((d) => ({ ...d, descricao: e.target.value }))}
               />
             </label>
-            <label className="form-row">
+            <label className="form-row demanda-field demanda-responsavel">
               <span>Responsável</span>
-              <select
-                value={demanda.responsavel_id}
-                onChange={(e) =>
-                  setDemanda((d) => ({
-                    ...d,
-                    responsavel_id: e.target.value ? Number(e.target.value) : '',
-                  }))
-                }
-              >
-                <option value="">Sem responsável</option>
-                {usuarios.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nome} ({u.role})
-                  </option>
-                ))}
-              </select>
-              <div className="row-actions">
+              <div className="demanda-responsavel-actions">
+                <select
+                  value={demanda.responsavel_id}
+                  onChange={(e) =>
+                    setDemanda((d) => ({
+                      ...d,
+                      responsavel_id: e.target.value ? Number(e.target.value) : '',
+                    }))
+                  }
+                >
+                  <option value="">Sem responsável</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nome} ({u.role})
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
                   className="btn-secondary"
@@ -412,7 +412,7 @@ export default function DetalheAvaliacao() {
                 </button>
               </div>
             </label>
-            <label className="form-row">
+            <label className="form-row demanda-field demanda-data-inicio">
               <span>Data Início</span>
               <input
                 type="date"
@@ -420,7 +420,7 @@ export default function DetalheAvaliacao() {
                 onChange={(e) => setDemanda((d) => ({ ...d, start_date: e.target.value }))}
               />
             </label>
-            <label className="form-row">
+            <label className="form-row demanda-field demanda-data-fim">
               <span>Data Fim</span>
               <input
                 type="date"
@@ -428,7 +428,7 @@ export default function DetalheAvaliacao() {
                 onChange={(e) => setDemanda((d) => ({ ...d, due_date: e.target.value }))}
               />
             </label>
-            <label className="form-row">
+            <label className="form-row demanda-field demanda-status">
               <span>Status de Andamento</span>
               <select
                 value={demanda.status_andamento}
@@ -441,7 +441,7 @@ export default function DetalheAvaliacao() {
                 ))}
               </select>
             </label>
-            <label className="form-row">
+            <label className="form-row demanda-field demanda-prioridade">
               <span>Prioridade</span>
               <select
                 value={demanda.prioridade}
@@ -455,7 +455,7 @@ export default function DetalheAvaliacao() {
               </select>
             </label>
           </div>
-          <div className="detalhe-form-actions">
+          <div className="detalhe-form-actions detalhe-demanda-actions">
             <button type="submit">Criar Demanda</button>
           </div>
         </form>

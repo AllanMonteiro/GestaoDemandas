@@ -492,6 +492,57 @@ button:disabled {
   margin-top: 10px;
 }
 
+.detalhe-demanda-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.detalhe-demanda-grid .demanda-field {
+  min-width: 0;
+}
+
+.demanda-titulo {
+  grid-column: span 4;
+}
+
+.demanda-descricao {
+  grid-column: span 4;
+}
+
+.demanda-responsavel {
+  grid-column: span 4;
+}
+
+.demanda-data-inicio {
+  grid-column: span 3;
+}
+
+.demanda-data-fim {
+  grid-column: span 3;
+}
+
+.demanda-status {
+  grid-column: span 3;
+}
+
+.demanda-prioridade {
+  grid-column: span 3;
+}
+
+.demanda-responsavel-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.demanda-responsavel-actions .btn-secondary {
+  white-space: nowrap;
+  min-width: 190px;
+}
+
 .detalhe-upload-form {
   margin-top: 12px;
   display: grid;
@@ -513,6 +564,10 @@ button:disabled {
 
 .detalhe-form-actions button {
   min-width: 220px;
+}
+
+.detalhe-demanda-actions {
+  justify-content: flex-end;
 }
 
 .config-logo-box {
@@ -572,6 +627,27 @@ button:disabled {
 
   .page-container {
     padding: 16px;
+  }
+
+  .detalhe-demanda-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detalhe-demanda-grid .demanda-field {
+    grid-column: auto;
+  }
+
+  .demanda-responsavel-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .demanda-responsavel-actions .btn-secondary {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .detalhe-demanda-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -682,6 +758,10 @@ button:disabled {
 
   .detalhe-trilha-path {
     font-size: 16px;
+  }
+
+  .detalhe-demanda-grid {
+    grid-template-columns: 1fr;
   }
 }
 
