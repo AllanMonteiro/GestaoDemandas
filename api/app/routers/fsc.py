@@ -9,7 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.rbac import require_roles
-from app.core.security import get_current_user, hash_password
+from app.core.security import get_current_user, hash_password, verify_password
 from app.db.session import get_db
 from app.models.auditlog import AcaoAuditEnum, AuditLog
 from app.models.fsc import (
@@ -40,6 +40,7 @@ from app.schemas.fsc import (
     AvaliacaoUpdate,
     ConfiguracaoSistemaOut,
     ConfiguracaoSistemaUpdate,
+    ConfirmacaoSenhaRequest,
     CriterioCreate,
     CriterioOut,
     CriterioUpdate,
@@ -330,6 +331,19 @@ def _validar_mesmo_programa(programa_a: int, programa_b: int, contexto: str) -> 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Inconsistência de programa de certificação em {contexto}.',
+        )
+
+
+def _validar_senha_sistema(senha_sistema: str | None, current_user: User) -> None:
+    if not senha_sistema:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Informe a senha do sistema para confirmar esta ação.',
+        )
+    if not verify_password(senha_sistema, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Senha do sistema inválida.',
         )
 
 
@@ -943,6 +957,8 @@ def atualizar_auditoria(
 ) -> AuditoriaOut:
     auditoria = _buscar_auditoria(db, auditoria_id)
     data = payload.model_dump(exclude_unset=True)
+    senha_sistema = data.pop('senha_sistema', None)
+    _validar_senha_sistema(senha_sistema, current_user)
 
     data_inicio = data.get('data_inicio', auditoria.data_inicio)
     data_fim = data.get('data_fim', auditoria.data_fim)
@@ -985,9 +1001,11 @@ def atualizar_auditoria(
 @router.delete('/auditorias/{auditoria_id}', response_model=MensagemOut)
 def remover_auditoria(
     auditoria_id: int,
+    payload: ConfirmacaoSenhaRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR)),
 ) -> MensagemOut:
+    _validar_senha_sistema(payload.senha_sistema, current_user)
     auditoria = _buscar_auditoria(db, auditoria_id)
     old_value = _dump_model(auditoria)
     db.delete(auditoria)

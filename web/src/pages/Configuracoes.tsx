@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 
-import { api, ConfiguracaoSistema } from '../api';
+import { api, ConfiguracaoSistema, Usuario } from '../api';
 
 type Props = {
   refreshConfiguracaoNoHeader: () => Promise<void>;
@@ -8,19 +8,27 @@ type Props = {
 
 export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
   const [configuracao, setConfiguracao] = useState<ConfiguracaoSistema | null>(null);
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [arquivoLogo, setArquivoLogo] = useState<File | null>(null);
+  const [senhaAtual, setSenhaAtual] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmacaoNovaSenha, setConfirmacaoNovaSenha] = useState('');
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
 
   const carregar = async () => {
     try {
       setErro('');
-      const { data } = await api.get<ConfiguracaoSistema>('/configuracoes');
-      setConfiguracao(data);
-      setNomeEmpresa(data.nome_empresa);
+      const [configResp, usuarioResp] = await Promise.all([
+        api.get<ConfiguracaoSistema>('/configuracoes'),
+        api.get<Usuario>('/auth/me'),
+      ]);
+      setConfiguracao(configResp.data);
+      setNomeEmpresa(configResp.data.nome_empresa);
+      setUsuario(usuarioResp.data);
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao carregar configurações.');
+      setErro(err?.response?.data?.detail || 'Falha ao carregar configuracoes.');
     }
   };
 
@@ -78,9 +86,31 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
     }
   };
 
+  const alterarSenhaLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    if (novaSenha !== confirmacaoNovaSenha) {
+      setErro('A confirmacao da nova senha nao confere.');
+      return;
+    }
+    try {
+      setErro('');
+      setMensagem('');
+      await api.post('/auth/alterar-senha', {
+        senha_atual: senhaAtual,
+        nova_senha: novaSenha,
+      });
+      setSenhaAtual('');
+      setNovaSenha('');
+      setConfirmacaoNovaSenha('');
+      setMensagem('Senha de login alterada com sucesso.');
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail || 'Falha ao alterar senha.');
+    }
+  };
+
   return (
     <div className="grid gap-16">
-      <h2>Configurações</h2>
+      <h2>Configuracoes</h2>
 
       {erro && <div className="error">{erro}</div>}
       {mensagem && <div className="success">{mensagem}</div>}
@@ -127,6 +157,49 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
           <button type="button" onClick={removerLogo}>
             Remover Logo
           </button>
+        )}
+      </div>
+
+      <div className="card grid gap-12">
+        <h3>Senha de Login</h3>
+        {usuario?.role === 'ADMIN' ? (
+          <form className="grid gap-12" onSubmit={alterarSenhaLogin}>
+            <label className="form-row">
+              <span>Senha atual</span>
+              <input
+                type="password"
+                value={senhaAtual}
+                onChange={(e) => setSenhaAtual(e.target.value)}
+                placeholder="Digite a senha atual"
+                required
+              />
+            </label>
+            <label className="form-row">
+              <span>Nova senha</span>
+              <input
+                type="password"
+                value={novaSenha}
+                onChange={(e) => setNovaSenha(e.target.value)}
+                placeholder="Minimo 6 caracteres"
+                minLength={6}
+                required
+              />
+            </label>
+            <label className="form-row">
+              <span>Confirmar nova senha</span>
+              <input
+                type="password"
+                value={confirmacaoNovaSenha}
+                onChange={(e) => setConfirmacaoNovaSenha(e.target.value)}
+                placeholder="Repita a nova senha"
+                minLength={6}
+                required
+              />
+            </label>
+            <button type="submit">Alterar Senha</button>
+          </form>
+        ) : (
+          <p className="muted-text">Apenas ADMIN pode alterar senha de login.</p>
         )}
       </div>
     </div>

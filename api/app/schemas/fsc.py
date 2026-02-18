@@ -186,6 +186,11 @@ class AuditoriaUpdate(BaseModel):
     data_fim: date | None = None
     organismo_certificador: str | None = Field(default=None, max_length=255)
     escopo: str | None = None
+    senha_sistema: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class ConfirmacaoSenhaRequest(BaseModel):
+    senha_sistema: str = Field(min_length=1, max_length=128)
 
 
 class AuditoriaOut(AuditoriaBase):

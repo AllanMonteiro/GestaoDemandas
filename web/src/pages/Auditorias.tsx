@@ -1,6 +1,7 @@
-﻿import { FormEvent, useState } from 'react';
+import { FormEvent, useState } from 'react';
 
 import { api, Auditoria } from '../api';
+import Modal from '../components/Modal';
 import Table from '../components/Table';
 
 type Props = {
@@ -24,6 +25,16 @@ export default function Auditorias({
   const [escopo, setEscopo] = useState('');
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
+
+  const [auditoriaEdicao, setAuditoriaEdicao] = useState<Auditoria | null>(null);
+  const [editYear, setEditYear] = useState(new Date().getFullYear());
+  const [editTipo, setEditTipo] = useState('Certificação');
+  const [editOrganismo, setEditOrganismo] = useState('');
+  const [editEscopo, setEditEscopo] = useState('');
+  const [senhaEdicao, setSenhaEdicao] = useState('');
+
+  const [auditoriaExclusao, setAuditoriaExclusao] = useState<Auditoria | null>(null);
+  const [senhaExclusao, setSenhaExclusao] = useState('');
 
   const criar = async (e: FormEvent) => {
     e.preventDefault();
@@ -57,6 +68,84 @@ export default function Auditorias({
       setMensagem(data.mensagem);
     } catch (err: any) {
       setErro(err?.response?.data?.detail || 'Falha ao gerar avaliações.');
+    }
+  };
+
+  const abrirEdicao = (auditoria: Auditoria) => {
+    setAuditoriaEdicao(auditoria);
+    setEditYear(auditoria.year);
+    setEditTipo(auditoria.tipo || 'Certificação');
+    setEditOrganismo(auditoria.organismo_certificador || '');
+    setEditEscopo(auditoria.escopo || '');
+    setSenhaEdicao('');
+  };
+
+  const fecharEdicao = () => {
+    setAuditoriaEdicao(null);
+    setSenhaEdicao('');
+  };
+
+  const salvarEdicao = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!auditoriaEdicao) return;
+    if (!senhaEdicao.trim()) {
+      setErro('Informe a senha do sistema para salvar a edição.');
+      return;
+    }
+
+    setErro('');
+    setMensagem('');
+    try {
+      await api.put(`/auditorias/${auditoriaEdicao.id}`, {
+        programa_id: auditoriaEdicao.programa_id,
+        year: editYear,
+        tipo: editTipo || null,
+        organismo_certificador: editOrganismo || null,
+        escopo: editEscopo || null,
+        senha_sistema: senhaEdicao,
+      });
+      await refreshAuditorias();
+      fecharEdicao();
+      setMensagem('Auditoria atualizada com sucesso.');
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail || 'Falha ao atualizar auditoria.');
+    }
+  };
+
+  const abrirExclusao = (auditoria: Auditoria) => {
+    setAuditoriaExclusao(auditoria);
+    setSenhaExclusao('');
+  };
+
+  const fecharExclusao = () => {
+    setAuditoriaExclusao(null);
+    setSenhaExclusao('');
+  };
+
+  const confirmarExclusao = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!auditoriaExclusao) return;
+    if (!senhaExclusao.trim()) {
+      setErro('Informe a senha do sistema para confirmar a exclusão.');
+      return;
+    }
+
+    setErro('');
+    setMensagem('');
+    try {
+      await api.delete(`/auditorias/${auditoriaExclusao.id}`, {
+        data: {
+          senha_sistema: senhaExclusao,
+        },
+      });
+      if (auditoriaId === auditoriaExclusao.id) {
+        setAuditoriaId(null);
+      }
+      await refreshAuditorias();
+      fecharExclusao();
+      setMensagem('Auditoria excluída com sucesso.');
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail || 'Falha ao excluir auditoria.');
     }
   };
 
@@ -131,9 +220,101 @@ export default function Auditorias({
             { title: 'Tipo', render: (a) => a.tipo || '-' },
             { title: 'Organismo', render: (a) => a.organismo_certificador || '-' },
             { title: 'Escopo', render: (a) => a.escopo || '-' },
+            {
+              title: 'Ações',
+              render: (a) => (
+                <div className="row-actions">
+                  <button type="button" className="btn-secondary" onClick={() => abrirEdicao(a)}>
+                    Editar
+                  </button>
+                  <button type="button" className="btn-danger" onClick={() => abrirExclusao(a)}>
+                    Excluir
+                  </button>
+                </div>
+              ),
+            },
           ]}
         />
       </div>
+
+      <Modal open={!!auditoriaEdicao} title="Editar Auditoria" onClose={fecharEdicao}>
+        <form className="grid gap-12" onSubmit={salvarEdicao}>
+          <label className="form-row">
+            <span>Ano</span>
+            <input
+              type="number"
+              min={2000}
+              max={2100}
+              value={editYear}
+              onChange={(e) => setEditYear(Number(e.target.value))}
+              required
+            />
+          </label>
+
+          <label className="form-row">
+            <span>Tipo</span>
+            <select value={editTipo} onChange={(e) => setEditTipo(e.target.value)}>
+              <option value="Certificação">Certificação</option>
+              <option value="Recertificação">Recertificação</option>
+            </select>
+          </label>
+
+          <label className="form-row">
+            <span>Organismo Certificador</span>
+            <input value={editOrganismo} onChange={(e) => setEditOrganismo(e.target.value)} />
+          </label>
+
+          <label className="form-row">
+            <span>Escopo</span>
+            <input value={editEscopo} onChange={(e) => setEditEscopo(e.target.value)} />
+          </label>
+
+          <label className="form-row">
+            <span>Senha do sistema (confirmação)</span>
+            <input
+              type="password"
+              value={senhaEdicao}
+              onChange={(e) => setSenhaEdicao(e.target.value)}
+              placeholder="Digite sua senha atual"
+              required
+            />
+          </label>
+
+          <div className="row-actions">
+            <button type="button" className="btn-secondary" onClick={fecharEdicao}>
+              Cancelar
+            </button>
+            <button type="submit">Salvar Alterações</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={!!auditoriaExclusao} title="Excluir Auditoria" onClose={fecharExclusao}>
+        <form className="grid gap-12" onSubmit={confirmarExclusao}>
+          <p>
+            Confirma a exclusão da auditoria <strong>{auditoriaExclusao?.year}</strong>?
+          </p>
+          <label className="form-row">
+            <span>Senha do sistema (confirmação)</span>
+            <input
+              type="password"
+              value={senhaExclusao}
+              onChange={(e) => setSenhaExclusao(e.target.value)}
+              placeholder="Digite sua senha atual"
+              required
+            />
+          </label>
+
+          <div className="row-actions">
+            <button type="button" className="btn-secondary" onClick={fecharExclusao}>
+              Cancelar
+            </button>
+            <button type="submit" className="btn-danger">
+              Excluir Auditoria
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

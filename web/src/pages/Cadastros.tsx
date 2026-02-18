@@ -35,6 +35,17 @@ export default function Cadastros({ programaId }: Props) {
     () => indicadores.filter((indicador) => indicador.criterio_id === novoTipo.criterio_id),
     [indicadores, novoTipo.criterio_id]
   );
+  const tiposFiltrados = useMemo(
+    () =>
+      tipos.filter((tipo) => {
+        if (!tipo.criterio_id || !tipo.indicador_id) return false;
+        if (!criterioMap.has(tipo.criterio_id) || !indicadorMap.has(tipo.indicador_id)) return false;
+        if (novoTipo.criterio_id && tipo.criterio_id !== novoTipo.criterio_id) return false;
+        if (novoTipo.indicador_id && tipo.indicador_id !== novoTipo.indicador_id) return false;
+        return true;
+      }),
+    [tipos, criterioMap, indicadorMap, novoTipo.criterio_id, novoTipo.indicador_id]
+  );
 
   const carregar = async () => {
     setErro('');
@@ -508,7 +519,8 @@ export default function Cadastros({ programaId }: Props) {
           </button>
         </form>
         <Table
-          rows={tipos}
+          rows={tiposFiltrados}
+          emptyText="Nenhum tipo de evidência encontrado para o critério/indicador selecionado."
           columns={[
             {
               title: 'Critério',
