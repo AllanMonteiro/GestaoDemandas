@@ -1,9 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import {
   api,
   Demanda,
+  STATUS_CONFORMIDADE_LABELS,
   STATUS_ANDAMENTO_LABELS,
+  StatusConformidade,
   StatusAndamento,
   Usuario,
 } from '../api';
@@ -16,15 +19,56 @@ type Props = {
 
 const STATUS_LIST: StatusAndamento[] = ['aberta', 'em_andamento', 'em_validacao', 'concluida', 'bloqueada'];
 
+type FiltroConformidade = '' | StatusConformidade | 'nao_conformes';
+const FILTRO_CONFORMIDADE_VALUES: FiltroConformidade[] = [
+  '',
+  'conforme',
+  'nao_conformes',
+  'nc_menor',
+  'nc_maior',
+  'oportunidade_melhoria',
+  'nao_se_aplica',
+];
+
+const parseFiltroConformidade = (value: string | null): FiltroConformidade => {
+  if (!value) return '';
+  if (FILTRO_CONFORMIDADE_VALUES.includes(value as FiltroConformidade)) {
+    return value as FiltroConformidade;
+  }
+  return '';
+};
+
 export default function Demandas({ programaId, auditoriaId }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [demandas, setDemandas] = useState<Demanda[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [statusFiltro, setStatusFiltro] = useState('');
+  const [conformidadeFiltro, setConformidadeFiltro] = useState<FiltroConformidade>(() =>
+    parseFiltroConformidade(searchParams.get('filtro_conformidade'))
+  );
   const [responsavelFiltro, setResponsavelFiltro] = useState('');
   const [atrasadas, setAtrasadas] = useState(false);
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
   const usuariosMap = useMemo(() => new Map(usuarios.map((u) => [u.id, u.nome])), [usuarios]);
+
+  useEffect(() => {
+    const filtroUrl = parseFiltroConformidade(searchParams.get('filtro_conformidade'));
+    if (filtroUrl !== conformidadeFiltro) {
+      setConformidadeFiltro(filtroUrl);
+    }
+  }, [searchParams, conformidadeFiltro]);
+
+  const atualizarFiltroConformidade = (value: FiltroConformidade) => {
+    setConformidadeFiltro(value);
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set('filtro_conformidade', value);
+    } else {
+      params.delete('filtro_conformidade');
+    }
+    setSearchParams(params);
+  };
 
   const carregar = async () => {
     if (!programaId || !auditoriaId) return;
@@ -35,6 +79,9 @@ export default function Demandas({ programaId, auditoriaId }: Props) {
           params: {
             programa_id: programaId,
             auditoria_id: auditoriaId,
+            status_conformidade:
+              conformidadeFiltro && conformidadeFiltro !== 'nao_conformes' ? conformidadeFiltro : undefined,
+            nao_conformes: conformidadeFiltro === 'nao_conformes' ? true : undefined,
             status_andamento: statusFiltro || undefined,
             responsavel_id: responsavelFiltro || undefined,
             atrasadas: atrasadas || undefined,
@@ -52,7 +99,7 @@ export default function Demandas({ programaId, auditoriaId }: Props) {
   useEffect(() => {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [programaId, auditoriaId, statusFiltro, responsavelFiltro, atrasadas]);
+  }, [programaId, auditoriaId, conformidadeFiltro, statusFiltro, responsavelFiltro, atrasadas]);
 
   const atualizarStatus = async (id: number, novoStatus: StatusAndamento) => {
     setErro('');
@@ -76,6 +123,22 @@ export default function Demandas({ programaId, auditoriaId }: Props) {
 
       <div className="card">
         <div className="filters-row">
+          <label className="form-row compact">
+            <span>Status de Conformidade</span>
+            <select
+              value={conformidadeFiltro}
+              onChange={(e) => atualizarFiltroConformidade(e.target.value as FiltroConformidade)}
+            >
+              <option value="">Todos</option>
+              <option value="conforme">{STATUS_CONFORMIDADE_LABELS.conforme}</option>
+              <option value="nao_conformes">Não Conformes (Menor + Maior)</option>
+              <option value="nc_menor">{STATUS_CONFORMIDADE_LABELS.nc_menor}</option>
+              <option value="nc_maior">{STATUS_CONFORMIDADE_LABELS.nc_maior}</option>
+              <option value="oportunidade_melhoria">{STATUS_CONFORMIDADE_LABELS.oportunidade_melhoria}</option>
+              <option value="nao_se_aplica">{STATUS_CONFORMIDADE_LABELS.nao_se_aplica}</option>
+            </select>
+          </label>
+
           <label className="form-row compact">
             <span>Status</span>
             <select value={statusFiltro} onChange={(e) => setStatusFiltro(e.target.value)}>

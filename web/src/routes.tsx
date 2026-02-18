@@ -18,6 +18,7 @@ type Props = {
   programaId: number | null;
   auditoriaId: number | null;
   setAuditoriaId: (id: number | null) => void;
+  selecionarContextoRelatorio: (programaId: number, year: number) => Promise<void>;
   refreshAuditorias: () => Promise<void>;
   refreshConfiguracaoNoHeader: () => Promise<void>;
 };
@@ -39,6 +40,7 @@ export default function AppRoutes({
   programaId,
   auditoriaId,
   setAuditoriaId,
+  selecionarContextoRelatorio,
   refreshAuditorias,
   refreshConfiguracaoNoHeader,
 }: Props) {
@@ -50,7 +52,11 @@ export default function AppRoutes({
         path="/"
         element={
           <ProtectedRoute token={token}>
-            <Dashboard programaId={programaId} auditoriaId={auditoriaId} />
+            <Dashboard
+              programaId={programaId}
+              auditoriaId={auditoriaId}
+              selecionarContextoRelatorio={selecionarContextoRelatorio}
+            />
           </ProtectedRoute>
         }
       />
@@ -74,7 +80,11 @@ export default function AppRoutes({
         path="/cadastros"
         element={
           <ProtectedRoute token={token}>
-            <Cadastros programaId={programaId} />
+            <Cadastros
+              programaId={programaId}
+              auditoriaId={auditoriaId}
+              selecionarContextoRelatorio={selecionarContextoRelatorio}
+            />
           </ProtectedRoute>
         }
       />

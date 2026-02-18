@@ -56,6 +56,7 @@ export interface Auditoria {
   data_inicio?: string | null;
   data_fim?: string | null;
   organismo_certificador?: string | null;
+  padrao_utilizado?: string | null;
   escopo?: string | null;
   created_at: string;
 }
@@ -122,6 +123,7 @@ export interface TipoEvidencia {
   indicador_id?: number | null;
   nome: string;
   descricao?: string | null;
+  status_conformidade: StatusConformidade;
 }
 
 export interface Evidencia {

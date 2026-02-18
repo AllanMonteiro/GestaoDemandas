@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+﻿import { FormEvent, useState } from 'react';
 
 import { api, Auditoria } from '../api';
 import Modal from '../components/Modal';
@@ -22,6 +22,7 @@ export default function Auditorias({
   const [year, setYear] = useState(new Date().getFullYear());
   const [tipo, setTipo] = useState('Certificação');
   const [organismo, setOrganismo] = useState('');
+  const [padrao, setPadrao] = useState('');
   const [escopo, setEscopo] = useState('');
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
@@ -30,6 +31,7 @@ export default function Auditorias({
   const [editYear, setEditYear] = useState(new Date().getFullYear());
   const [editTipo, setEditTipo] = useState('Certificação');
   const [editOrganismo, setEditOrganismo] = useState('');
+  const [editPadrao, setEditPadrao] = useState('');
   const [editEscopo, setEditEscopo] = useState('');
   const [senhaEdicao, setSenhaEdicao] = useState('');
 
@@ -50,6 +52,7 @@ export default function Auditorias({
         year,
         tipo: tipo || null,
         organismo_certificador: organismo || null,
+        padrao_utilizado: padrao || null,
         escopo: escopo || null,
       });
       await refreshAuditorias();
@@ -76,6 +79,7 @@ export default function Auditorias({
     setEditYear(auditoria.year);
     setEditTipo(auditoria.tipo || 'Certificação');
     setEditOrganismo(auditoria.organismo_certificador || '');
+    setEditPadrao(auditoria.padrao_utilizado || '');
     setEditEscopo(auditoria.escopo || '');
     setSenhaEdicao('');
   };
@@ -101,6 +105,7 @@ export default function Auditorias({
         year: editYear,
         tipo: editTipo || null,
         organismo_certificador: editOrganismo || null,
+        padrao_utilizado: editPadrao || null,
         escopo: editEscopo || null,
         senha_sistema: senhaEdicao,
       });
@@ -185,6 +190,11 @@ export default function Auditorias({
           </label>
 
           <label className="form-row">
+            <span>Padrão Utilizado</span>
+            <input value={padrao} onChange={(e) => setPadrao(e.target.value)} />
+          </label>
+
+          <label className="form-row">
             <span>Escopo</span>
             <input value={escopo} onChange={(e) => setEscopo(e.target.value)} />
           </label>
@@ -219,6 +229,7 @@ export default function Auditorias({
             { title: 'Ano', render: (a) => a.year },
             { title: 'Tipo', render: (a) => a.tipo || '-' },
             { title: 'Organismo', render: (a) => a.organismo_certificador || '-' },
+            { title: 'Padrão', render: (a) => a.padrao_utilizado || '-' },
             { title: 'Escopo', render: (a) => a.escopo || '-' },
             {
               title: 'Ações',
@@ -262,6 +273,11 @@ export default function Auditorias({
           <label className="form-row">
             <span>Organismo Certificador</span>
             <input value={editOrganismo} onChange={(e) => setEditOrganismo(e.target.value)} />
+          </label>
+
+          <label className="form-row">
+            <span>Padrão Utilizado</span>
+            <input value={editPadrao} onChange={(e) => setEditPadrao(e.target.value)} />
           </label>
 
           <label className="form-row">

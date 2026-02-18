@@ -374,6 +374,28 @@ button:disabled {
   font-size: 13px;
 }
 
+.table-link-button {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.table-link-button:hover {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+.table-link-button:disabled {
+  color: var(--muted);
+  text-decoration: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .empty-cell {
   text-align: center;
   color: var(--muted);

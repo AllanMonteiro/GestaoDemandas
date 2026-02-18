@@ -171,6 +171,7 @@ class AuditoriaBase(BaseModel):
     data_inicio: date | None = None
     data_fim: date | None = None
     organismo_certificador: str | None = Field(default=None, max_length=255)
+    padrao_utilizado: str | None = Field(default=None, max_length=255)
     escopo: str | None = None
 
 
@@ -185,6 +186,7 @@ class AuditoriaUpdate(BaseModel):
     data_inicio: date | None = None
     data_fim: date | None = None
     organismo_certificador: str | None = Field(default=None, max_length=255)
+    padrao_utilizado: str | None = Field(default=None, max_length=255)
     escopo: str | None = None
     senha_sistema: str | None = Field(default=None, min_length=1, max_length=128)
 
@@ -238,6 +240,7 @@ class EvidenceTypeBase(BaseModel):
     indicador_id: int
     nome: str = Field(min_length=2, max_length=120)
     descricao: str | None = None
+    status_conformidade: StatusConformidadeEnum = StatusConformidadeEnum.conforme
 
 
 class EvidenceTypeCreate(EvidenceTypeBase):
@@ -250,6 +253,7 @@ class EvidenceTypeUpdate(BaseModel):
     indicador_id: int | None = None
     nome: str | None = Field(default=None, min_length=2, max_length=120)
     descricao: str | None = None
+    status_conformidade: StatusConformidadeEnum | None = None
 
 
 class EvidenceTypeOut(BaseModel):
@@ -261,6 +265,7 @@ class EvidenceTypeOut(BaseModel):
     indicador_id: int | None
     nome: str
     descricao: str | None
+    status_conformidade: StatusConformidadeEnum
 
 
 class EvidenciaCreate(BaseModel):

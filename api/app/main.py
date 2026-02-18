@@ -9,7 +9,15 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
-from app.models.fsc import AuditoriaAno, ConfiguracaoSistema, Criterio, EvidenceType, Indicador, ProgramaCertificacao
+from app.models.fsc import (
+    AuditoriaAno,
+    ConfiguracaoSistema,
+    Criterio,
+    EvidenceType,
+    Indicador,
+    ProgramaCertificacao,
+    StatusConformidadeEnum,
+)
 from app.models.user import RoleEnum, User
 from app.routers import auth, fsc, reports
 from app.services.s3_storage import ensure_bucket_exists
@@ -20,7 +28,7 @@ settings = get_settings()
 def _seed_programas_certificacao() -> None:
     programas_padrao = [
         ('FSC', 'FSC', 'Forest Stewardship Council'),
-        ('PFC', 'PFC', 'Programa de Certificação Florestal'),
+        ('PEFC', 'PEFC', 'Programme for the Endorsement of Forest Certification'),
         ('ONCA_PINTADA', 'Onça Pintada', 'Certificação e monitoramento para onça pintada'),
         ('CARBONO', 'Carbono', 'Programas e auditorias para carbono florestal'),
     ]
@@ -28,29 +36,42 @@ def _seed_programas_certificacao() -> None:
     with SessionLocal() as db:
         existentes = {codigo for codigo in db.scalars(select(ProgramaCertificacao.codigo)).all()}
         for codigo, nome, descricao in programas_padrao:
+            if codigo == 'PEFC' and 'PFC' in existentes and 'PEFC' not in existentes:
+                # Será normalizado de PFC -> PEFC na rotina seguinte.
+                continue
             if codigo in existentes:
                 continue
             db.add(ProgramaCertificacao(codigo=codigo, nome=nome, descricao=descricao))
+            existentes.add(codigo)
         db.commit()
 
 
 def _normalizar_programas_certificacao() -> None:
     padrao_por_codigo = {
         'FSC': ('FSC', 'Forest Stewardship Council'),
-        'PFC': ('PFC', 'Programa de Certificação Florestal'),
+        'PEFC': ('PEFC', 'Programme for the Endorsement of Forest Certification'),
+        'PFC': ('PEFC', 'Programme for the Endorsement of Forest Certification'),
         'ONCA_PINTADA': ('Onça Pintada', 'Certificação e monitoramento para onça pintada'),
         'CARBONO': ('Carbono', 'Programas e auditorias para carbono florestal'),
     }
 
     with SessionLocal() as db:
         programas = list(db.scalars(select(ProgramaCertificacao)).all())
+        tem_pefc = any(programa.codigo == 'PEFC' for programa in programas)
         alterou = False
         for programa in programas:
             padrao = padrao_por_codigo.get(programa.codigo)
             if not padrao:
                 continue
 
+            if programa.codigo == 'PFC' and tem_pefc:
+                # Mantém legado quando já existe PEFC para evitar conflito de unicidade.
+                continue
+
             nome, descricao = padrao
+            if programa.codigo == 'PFC' and not tem_pefc:
+                programa.codigo = 'PEFC'
+                alterou = True
             if programa.nome != nome:
                 programa.nome = nome
                 alterou = True
@@ -138,6 +159,7 @@ def _seed_evidence_types() -> None:
                         indicador_id=indicador.id,
                         nome=nome,
                         descricao=descricao,
+                        status_conformidade=StatusConformidadeEnum.conforme,
                     )
                 )
                 existentes.add(chave)

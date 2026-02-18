@@ -112,6 +112,7 @@ class AuditoriaAno(Base):
     data_inicio: Mapped[date | None] = mapped_column(Date, nullable=True)
     data_fim: Mapped[date | None] = mapped_column(Date, nullable=True)
     organismo_certificador: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    padrao_utilizado: Mapped[str | None] = mapped_column(String(255), nullable=True)
     escopo: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
@@ -171,6 +172,12 @@ class EvidenceType(Base):
     )
     nome: Mapped[str] = mapped_column(String(120), nullable=False)
     descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status_conformidade: Mapped[StatusConformidadeEnum] = mapped_column(
+        Enum(StatusConformidadeEnum, name='status_conformidade_enum', native_enum=False),
+        nullable=False,
+        default=StatusConformidadeEnum.conforme,
+        server_default=StatusConformidadeEnum.conforme.value,
+    )
 
     programa = relationship('ProgramaCertificacao', back_populates='tipos_evidencia')
     criterio = relationship('Criterio', back_populates='tipos_evidencia')

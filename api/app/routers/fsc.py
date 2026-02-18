@@ -1589,6 +1589,8 @@ def listar_demandas(
     programa_id: int | None = Query(default=None),
     auditoria_id: int | None = Query(default=None),
     avaliacao_id: int | None = Query(default=None),
+    status_conformidade: StatusConformidadeEnum | None = Query(default=None),
+    nao_conformes: bool | None = Query(default=None),
     status_andamento: StatusAndamentoEnum | None = Query(default=None),
     responsavel_id: int | None = Query(default=None),
     atrasadas: bool | None = Query(default=None),
@@ -1602,6 +1604,14 @@ def listar_demandas(
         query = query.where(AvaliacaoIndicador.auditoria_ano_id == auditoria_id)
     if avaliacao_id:
         query = query.where(Demanda.avaliacao_id == avaliacao_id)
+    if nao_conformes:
+        query = query.where(
+            AvaliacaoIndicador.status_conformidade.in_(
+                (StatusConformidadeEnum.nc_menor, StatusConformidadeEnum.nc_maior)
+            )
+        )
+    elif status_conformidade:
+        query = query.where(AvaliacaoIndicador.status_conformidade == status_conformidade)
     if status_andamento:
         query = query.where(Demanda.status_andamento == status_andamento)
     if responsavel_id:

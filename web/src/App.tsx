@@ -26,7 +26,10 @@ export default function App() {
     return data;
   };
 
-  const carregarAuditorias = async (programaSelecionado: number | null = programaId) => {
+  const carregarAuditorias = async (
+    programaSelecionado: number | null = programaId,
+    anoPreferido?: number
+  ) => {
     if (!programaSelecionado) {
       setAuditorias([]);
       setAuditoriaId(null);
@@ -41,15 +44,24 @@ export default function App() {
 
     if (data.length > 0) {
       const existeSelecionada = auditoriaId && data.some((a) => a.id === auditoriaId);
-      if (!existeSelecionada) {
-        const id = data[0].id;
-        setAuditoriaId(id);
-        localStorage.setItem('auditoria_id', String(id));
+      const auditoriaPreferida =
+        typeof anoPreferido === 'number' ? data.find((a) => a.year === anoPreferido) : undefined;
+      const idAlvo =
+        auditoriaPreferida?.id || (existeSelecionada ? (auditoriaId as number) : data[0].id);
+      if (idAlvo !== auditoriaId) {
+        setAuditoriaId(idAlvo);
+        localStorage.setItem('auditoria_id', String(idAlvo));
       }
     } else {
       setAuditoriaId(null);
       localStorage.removeItem('auditoria_id');
     }
+  };
+
+  const selecionarContextoRelatorio = async (novoProgramaId: number, year: number) => {
+    setProgramaId(novoProgramaId);
+    localStorage.setItem('programa_id', String(novoProgramaId));
+    await carregarAuditorias(novoProgramaId, year);
   };
 
   const carregarUsuario = async () => {
@@ -130,6 +142,7 @@ export default function App() {
       programaId={programaId}
       auditoriaId={auditoriaId}
       setAuditoriaId={setAuditoriaId}
+      selecionarContextoRelatorio={selecionarContextoRelatorio}
       refreshAuditorias={carregarAuditorias}
       refreshConfiguracaoNoHeader={carregarConfiguracao}
     />
