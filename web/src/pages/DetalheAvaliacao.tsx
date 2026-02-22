@@ -1,5 +1,5 @@
 ﻿import { FormEvent, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import {
   api,
@@ -29,6 +29,7 @@ const PRIORIDADE_LIST: Prioridade[] = ['baixa', 'media', 'alta', 'critica'];
 
 export default function DetalheAvaliacao() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const avaliacaoId = Number(id);
 
   const [detalhe, setDetalhe] = useState<AvaliacaoDetalhe | null>(null);
@@ -285,6 +286,14 @@ export default function DetalheAvaliacao() {
             { title: 'Formato', render: (e) => e.kind },
             { title: 'URL/Caminho/Texto', render: (e) => e.url_or_path },
             { title: 'Observações', render: (e) => e.observacoes || '-' },
+            {
+              title: 'Documentos',
+              render: (e) => (
+                <button type="button" onClick={() => navigate(`/documentos?evidencia_id=${e.id}`)}>
+                  Construir/Revisar
+                </button>
+              ),
+            },
           ]}
         />
 

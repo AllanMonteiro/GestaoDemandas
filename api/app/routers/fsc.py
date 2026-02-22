@@ -18,6 +18,10 @@ from app.models.fsc import (
     ConfiguracaoSistema,
     Criterio,
     Demanda,
+    DocumentoEvidencia,
+    MonitoramentoCriterio,
+    NotificacaoMonitoramento,
+    ResolucaoNotificacao,
     EvidenceType,
     Evidencia,
     EvidenciaKindEnum,
@@ -26,6 +30,9 @@ from app.models.fsc import (
     Principio,
     StatusAndamentoEnum,
     StatusConformidadeEnum,
+    StatusDocumentoEnum,
+    StatusMonitoramentoCriterioEnum,
+    StatusNotificacaoEnum,
 )
 from app.models.user import RoleEnum, User
 from app.schemas.fsc import (
@@ -48,6 +55,19 @@ from app.schemas.fsc import (
     DemandaOut,
     DemandaPatch,
     DemandaUpdate,
+    DocumentoEvidenciaCreate,
+    DocumentoEvidenciaOut,
+    DocumentoEvidenciaStatusPatch,
+    DocumentoEvidenciaUpdate,
+    MonitoramentoCriterioCreate,
+    MonitoramentoCriterioOut,
+    MonitoramentoCriterioUpdate,
+    NotificacaoMonitoramentoCreate,
+    NotificacaoMonitoramentoOut,
+    NotificacaoMonitoramentoStatusPatch,
+    NotificacaoMonitoramentoUpdate,
+    ResolucaoNotificacaoCreate,
+    ResolucaoNotificacaoOut,
     EvidenceTypeCreate,
     EvidenceTypeOut,
     EvidenceTypeUpdate,
@@ -216,6 +236,46 @@ def _buscar_avaliacao(db: Session, avaliacao_id: int) -> AvaliacaoIndicador:
     return avaliacao
 
 
+def _buscar_evidencia(db: Session, evidencia_id: int) -> Evidencia:
+    evidencia = db.get(Evidencia, evidencia_id)
+    if not evidencia:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Evidência não encontrada.')
+    return evidencia
+
+
+def _buscar_documento_evidencia(db: Session, documento_id: int) -> DocumentoEvidencia:
+    documento = db.get(DocumentoEvidencia, documento_id)
+    if not documento:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Documento da evidência não encontrado.')
+    return documento
+
+
+def _validar_status_documento(
+    status_documento: StatusDocumentoEnum,
+    observacoes_revisao: str | None,
+) -> None:
+    if status_documento in (StatusDocumentoEnum.aprovado, StatusDocumentoEnum.reprovado) and not _texto_preenchido(
+        observacoes_revisao
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Para status Aprovado/Reprovado, informe observações de revisão.',
+        )
+
+
+def _atualizar_metadados_revisao(
+    documento: DocumentoEvidencia,
+    status_documento: StatusDocumentoEnum,
+    current_user_id: int,
+) -> None:
+    if status_documento in (StatusDocumentoEnum.aprovado, StatusDocumentoEnum.reprovado):
+        documento.revisado_por_id = current_user_id
+        documento.data_revisao = datetime.now(UTC)
+    elif status_documento in (StatusDocumentoEnum.em_construcao, StatusDocumentoEnum.em_revisao):
+        documento.revisado_por_id = None
+        documento.data_revisao = None
+
+
 def _buscar_tipo_evidencia(db: Session, tipo_id: int) -> EvidenceType:
     tipo = db.get(EvidenceType, tipo_id)
     if not tipo:
@@ -277,6 +337,44 @@ def _buscar_demanda(db: Session, demanda_id: int) -> Demanda:
     if not demanda:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Demanda não encontrada.')
     return demanda
+
+
+def _normalizar_mes_referencia(mes_referencia: date) -> date:
+    return date(mes_referencia.year, mes_referencia.month, 1)
+
+
+def _buscar_monitoramento_criterio(db: Session, monitoramento_id: int) -> MonitoramentoCriterio:
+    monitoramento = db.get(MonitoramentoCriterio, monitoramento_id)
+    if not monitoramento:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Monitoramento do critério não encontrado.')
+    return monitoramento
+
+
+def _buscar_notificacao_monitoramento(db: Session, notificacao_id: int) -> NotificacaoMonitoramento:
+    notificacao = db.get(NotificacaoMonitoramento, notificacao_id)
+    if not notificacao:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Notificação não encontrada.')
+    return notificacao
+
+
+def _buscar_resolucao_notificacao(db: Session, resolucao_id: int) -> ResolucaoNotificacao:
+    resolucao = db.get(ResolucaoNotificacao, resolucao_id)
+    if not resolucao:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Resolução não encontrada.')
+    return resolucao
+
+
+def _validar_vinculo_monitoramento(
+    db: Session,
+    programa_id: int,
+    auditoria_ano_id: int,
+    criterio_id: int,
+) -> tuple[AuditoriaAno, Criterio]:
+    auditoria = _buscar_auditoria(db, auditoria_ano_id)
+    criterio = _buscar_criterio(db, criterio_id)
+    _validar_mesmo_programa(programa_id, auditoria.programa_id, 'monitoramento (auditoria)')
+    _validar_mesmo_programa(programa_id, criterio.programa_id, 'monitoramento (critério)')
+    return auditoria, criterio
 
 
 def _buscar_usuario(db: Session, usuario_id: int) -> User:
@@ -1453,13 +1551,23 @@ def remover_tipo_evidencia(
 @router.get('/evidencias', response_model=list[EvidenciaOut])
 def listar_evidencias(
     programa_id: int | None = Query(default=None),
-    avaliacao_id: int = Query(...),
+    avaliacao_id: int | None = Query(default=None),
+    auditoria_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> list[EvidenciaOut]:
-    query = select(Evidencia).where(Evidencia.avaliacao_id == avaliacao_id)
+    if avaliacao_id is None and auditoria_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Informe avaliacao_id ou auditoria_id para listar evidências.',
+        )
+    query = select(Evidencia).join(AvaliacaoIndicador, AvaliacaoIndicador.id == Evidencia.avaliacao_id)
     if programa_id:
         query = query.where(Evidencia.programa_id == programa_id)
+    if avaliacao_id:
+        query = query.where(Evidencia.avaliacao_id == avaliacao_id)
+    if auditoria_id:
+        query = query.where(AvaliacaoIndicador.auditoria_ano_id == auditoria_id)
     return list(db.scalars(query.order_by(Evidencia.created_at.desc())).all())
 
 
@@ -1548,10 +1656,7 @@ def obter_evidencia(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> EvidenciaOut:
-    evidencia = db.get(Evidencia, evidencia_id)
-    if not evidencia:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Evidência não encontrada.')
-    return evidencia
+    return _buscar_evidencia(db, evidencia_id)
 
 
 @router.delete('/evidencias/{evidencia_id}', response_model=MensagemOut)
@@ -1560,9 +1665,7 @@ def remover_evidencia(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MensagemOut:
-    evidencia = db.get(Evidencia, evidencia_id)
-    if not evidencia:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Evidência não encontrada.')
+    evidencia = _buscar_evidencia(db, evidencia_id)
     if current_user.role == RoleEnum.RESPONSAVEL and evidencia.created_by != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Você só pode remover suas próprias evidências.')
     if current_user.role not in (RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR, RoleEnum.RESPONSAVEL):
@@ -1583,6 +1686,648 @@ def remover_evidencia(
     )
     db.commit()
     return MensagemOut(mensagem='Evidência removida com sucesso.')
+
+
+@router.get('/documentos-evidencia', response_model=list[DocumentoEvidenciaOut])
+def listar_documentos_evidencia(
+    programa_id: int | None = Query(default=None),
+    auditoria_id: int | None = Query(default=None),
+    evidencia_id: int | None = Query(default=None),
+    status_documento: StatusDocumentoEnum | None = Query(default=None),
+    responsavel_id: int | None = Query(default=None),
+    q: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[DocumentoEvidenciaOut]:
+    query = select(DocumentoEvidencia).order_by(DocumentoEvidencia.updated_at.desc(), DocumentoEvidencia.id.desc())
+    if programa_id:
+        query = query.where(DocumentoEvidencia.programa_id == programa_id)
+    if auditoria_id:
+        query = query.where(DocumentoEvidencia.auditoria_ano_id == auditoria_id)
+    if evidencia_id:
+        query = query.where(DocumentoEvidencia.evidencia_id == evidencia_id)
+    if status_documento:
+        query = query.where(DocumentoEvidencia.status_documento == status_documento)
+    if responsavel_id:
+        query = query.where(DocumentoEvidencia.responsavel_id == responsavel_id)
+    if current_user.role == RoleEnum.RESPONSAVEL:
+        query = query.where(
+            or_(
+                DocumentoEvidencia.responsavel_id == current_user.id,
+                DocumentoEvidencia.created_by == current_user.id,
+            )
+        )
+    if q and q.strip():
+        termo = f"%{q.strip().lower()}%"
+        query = query.where(
+            or_(
+                func.lower(DocumentoEvidencia.titulo).like(termo),
+                func.lower(func.coalesce(DocumentoEvidencia.conteudo, '')).like(termo),
+            )
+        )
+    return list(db.scalars(query).all())
+
+
+@router.post('/documentos-evidencia', response_model=DocumentoEvidenciaOut, status_code=status.HTTP_201_CREATED)
+def criar_documento_evidencia(
+    payload: DocumentoEvidenciaCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR, RoleEnum.RESPONSAVEL)),
+) -> DocumentoEvidenciaOut:
+    evidencia = _buscar_evidencia(db, payload.evidencia_id)
+    avaliacao = _buscar_avaliacao(db, evidencia.avaliacao_id)
+    if payload.responsavel_id is not None:
+        _buscar_usuario(db, payload.responsavel_id)
+    _validar_status_documento(payload.status_documento, payload.observacoes_revisao)
+
+    documento = DocumentoEvidencia(
+        **payload.model_dump(),
+        programa_id=evidencia.programa_id,
+        auditoria_ano_id=avaliacao.auditoria_ano_id,
+        created_by=current_user.id,
+    )
+    _atualizar_metadados_revisao(documento, documento.status_documento, current_user.id)
+    db.add(documento)
+    db.flush()
+    registrar_log(
+        db,
+        entidade='documento_evidencia',
+        entidade_id=documento.id,
+        acao=AcaoAuditEnum.CREATE,
+        created_by=current_user.id,
+        new_value=_dump_model(documento),
+        programa_id=documento.programa_id,
+        auditoria_ano_id=documento.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(documento)
+    return documento
+
+
+@router.get('/documentos-evidencia/{documento_id}', response_model=DocumentoEvidenciaOut)
+def obter_documento_evidencia(
+    documento_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DocumentoEvidenciaOut:
+    documento = _buscar_documento_evidencia(db, documento_id)
+    if current_user.role == RoleEnum.RESPONSAVEL and documento.responsavel_id != current_user.id and documento.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Você só pode visualizar documentos atribuídos ou criados por você.',
+        )
+    return documento
+
+
+@router.put('/documentos-evidencia/{documento_id}', response_model=DocumentoEvidenciaOut)
+def atualizar_documento_evidencia(
+    documento_id: int,
+    payload: DocumentoEvidenciaUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR, RoleEnum.RESPONSAVEL)),
+) -> DocumentoEvidenciaOut:
+    documento = _buscar_documento_evidencia(db, documento_id)
+    if current_user.role == RoleEnum.RESPONSAVEL and documento.created_by != current_user.id and documento.responsavel_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Você só pode editar documentos atribuídos ou criados por você.',
+        )
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Nenhum campo foi informado para atualização.')
+
+    if 'responsavel_id' in data and data['responsavel_id'] is not None:
+        _buscar_usuario(db, data['responsavel_id'])
+
+    status_destino = data.get('status_documento', documento.status_documento)
+    if status_destino is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='status_documento não pode ser nulo.')
+    observacoes_revisao = data.get('observacoes_revisao', documento.observacoes_revisao)
+    _validar_status_documento(status_destino, observacoes_revisao)
+
+    old_value = _dump_model(documento)
+    status_anterior = documento.status_documento
+    conteudo_anterior = documento.conteudo
+    titulo_anterior = documento.titulo
+    for field, value in data.items():
+        setattr(documento, field, value)
+
+    if documento.titulo != titulo_anterior or documento.conteudo != conteudo_anterior:
+        documento.versao += 1
+    _atualizar_metadados_revisao(documento, documento.status_documento, current_user.id)
+
+    acao = AcaoAuditEnum.STATUS_CHANGE if status_anterior != documento.status_documento else AcaoAuditEnum.UPDATE
+    registrar_log(
+        db,
+        entidade='documento_evidencia',
+        entidade_id=documento.id,
+        acao=acao,
+        created_by=current_user.id,
+        old_value=old_value,
+        new_value=_dump_model(documento),
+        programa_id=documento.programa_id,
+        auditoria_ano_id=documento.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(documento)
+    return documento
+
+
+@router.patch('/documentos-evidencia/{documento_id}/status', response_model=DocumentoEvidenciaOut)
+def revisar_status_documento_evidencia(
+    documento_id: int,
+    payload: DocumentoEvidenciaStatusPatch,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> DocumentoEvidenciaOut:
+    documento = _buscar_documento_evidencia(db, documento_id)
+    _validar_status_documento(payload.status_documento, payload.observacoes_revisao)
+    old_value = _dump_model(documento)
+    documento.status_documento = payload.status_documento
+    documento.observacoes_revisao = payload.observacoes_revisao
+    _atualizar_metadados_revisao(documento, payload.status_documento, current_user.id)
+    registrar_log(
+        db,
+        entidade='documento_evidencia',
+        entidade_id=documento.id,
+        acao=AcaoAuditEnum.STATUS_CHANGE,
+        created_by=current_user.id,
+        old_value=old_value,
+        new_value=_dump_model(documento),
+        programa_id=documento.programa_id,
+        auditoria_ano_id=documento.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(documento)
+    return documento
+
+
+@router.delete('/documentos-evidencia/{documento_id}', response_model=MensagemOut)
+def remover_documento_evidencia(
+    documento_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> MensagemOut:
+    documento = _buscar_documento_evidencia(db, documento_id)
+    old_value = _dump_model(documento)
+    db.delete(documento)
+    registrar_log(
+        db,
+        entidade='documento_evidencia',
+        entidade_id=documento_id,
+        acao=AcaoAuditEnum.DELETE,
+        created_by=current_user.id,
+        old_value=old_value,
+        programa_id=documento.programa_id,
+        auditoria_ano_id=documento.auditoria_ano_id,
+    )
+    db.commit()
+    return MensagemOut(mensagem='Documento da evidência removido com sucesso.')
+
+
+@router.get('/monitoramentos-criterio', response_model=list[MonitoramentoCriterioOut])
+def listar_monitoramentos_criterio(
+    programa_id: int | None = Query(default=None),
+    auditoria_id: int | None = Query(default=None),
+    criterio_id: int | None = Query(default=None),
+    mes_referencia: date | None = Query(default=None),
+    status_monitoramento: StatusMonitoramentoCriterioEnum | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[MonitoramentoCriterioOut]:
+    query = select(MonitoramentoCriterio).order_by(
+        MonitoramentoCriterio.mes_referencia.desc(),
+        MonitoramentoCriterio.updated_at.desc(),
+        MonitoramentoCriterio.id.desc(),
+    )
+    if programa_id:
+        query = query.where(MonitoramentoCriterio.programa_id == programa_id)
+    if auditoria_id:
+        query = query.where(MonitoramentoCriterio.auditoria_ano_id == auditoria_id)
+    if criterio_id:
+        query = query.where(MonitoramentoCriterio.criterio_id == criterio_id)
+    if mes_referencia:
+        query = query.where(MonitoramentoCriterio.mes_referencia == _normalizar_mes_referencia(mes_referencia))
+    if status_monitoramento:
+        query = query.where(MonitoramentoCriterio.status_monitoramento == status_monitoramento)
+    if current_user.role == RoleEnum.RESPONSAVEL:
+        notificacoes_subq = select(NotificacaoMonitoramento.monitoramento_id).where(
+            NotificacaoMonitoramento.responsavel_id == current_user.id
+        )
+        query = query.where(
+            or_(
+                MonitoramentoCriterio.created_by == current_user.id,
+                MonitoramentoCriterio.id.in_(notificacoes_subq),
+            )
+        )
+    return list(db.scalars(query).all())
+
+
+@router.post('/monitoramentos-criterio', response_model=MonitoramentoCriterioOut, status_code=status.HTTP_201_CREATED)
+def criar_monitoramento_criterio(
+    payload: MonitoramentoCriterioCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> MonitoramentoCriterioOut:
+    mes_referencia = _normalizar_mes_referencia(payload.mes_referencia)
+    auditoria = _buscar_auditoria(db, payload.auditoria_ano_id)
+    _validar_vinculo_monitoramento(db, auditoria.programa_id, payload.auditoria_ano_id, payload.criterio_id)
+    existente = db.scalar(
+        select(MonitoramentoCriterio).where(
+            MonitoramentoCriterio.programa_id == auditoria.programa_id,
+            MonitoramentoCriterio.auditoria_ano_id == payload.auditoria_ano_id,
+            MonitoramentoCriterio.criterio_id == payload.criterio_id,
+            MonitoramentoCriterio.mes_referencia == mes_referencia,
+        )
+    )
+    if existente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Já existe monitoramento para este critério no mês informado.',
+        )
+
+    monitoramento = MonitoramentoCriterio(
+        programa_id=auditoria.programa_id,
+        auditoria_ano_id=payload.auditoria_ano_id,
+        criterio_id=payload.criterio_id,
+        mes_referencia=mes_referencia,
+        status_monitoramento=payload.status_monitoramento,
+        observacoes=payload.observacoes,
+        created_by=current_user.id,
+    )
+    db.add(monitoramento)
+    db.flush()
+    registrar_log(
+        db,
+        entidade='monitoramento_criterio',
+        entidade_id=monitoramento.id,
+        acao=AcaoAuditEnum.CREATE,
+        created_by=current_user.id,
+        new_value=_dump_model(monitoramento),
+        programa_id=monitoramento.programa_id,
+        auditoria_ano_id=monitoramento.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(monitoramento)
+    return monitoramento
+
+
+@router.get('/monitoramentos-criterio/{monitoramento_id}', response_model=MonitoramentoCriterioOut)
+def obter_monitoramento_criterio(
+    monitoramento_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MonitoramentoCriterioOut:
+    monitoramento = _buscar_monitoramento_criterio(db, monitoramento_id)
+    if current_user.role == RoleEnum.RESPONSAVEL:
+        possui_notificacao = db.scalar(
+            select(NotificacaoMonitoramento.id).where(
+                NotificacaoMonitoramento.monitoramento_id == monitoramento.id,
+                NotificacaoMonitoramento.responsavel_id == current_user.id,
+            )
+        )
+        if monitoramento.created_by != current_user.id and not possui_notificacao:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Você não possui permissão para visualizar este monitoramento.',
+            )
+    return monitoramento
+
+
+@router.put('/monitoramentos-criterio/{monitoramento_id}', response_model=MonitoramentoCriterioOut)
+def atualizar_monitoramento_criterio(
+    monitoramento_id: int,
+    payload: MonitoramentoCriterioUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> MonitoramentoCriterioOut:
+    monitoramento = _buscar_monitoramento_criterio(db, monitoramento_id)
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Nenhum campo foi informado para atualização.')
+
+    criterio_id = data.get('criterio_id', monitoramento.criterio_id)
+    mes_referencia = _normalizar_mes_referencia(data.get('mes_referencia', monitoramento.mes_referencia))
+    _validar_vinculo_monitoramento(
+        db,
+        monitoramento.programa_id,
+        monitoramento.auditoria_ano_id,
+        criterio_id,
+    )
+    existente = db.scalar(
+        select(MonitoramentoCriterio).where(
+            MonitoramentoCriterio.programa_id == monitoramento.programa_id,
+            MonitoramentoCriterio.auditoria_ano_id == monitoramento.auditoria_ano_id,
+            MonitoramentoCriterio.criterio_id == criterio_id,
+            MonitoramentoCriterio.mes_referencia == mes_referencia,
+            MonitoramentoCriterio.id != monitoramento.id,
+        )
+    )
+    if existente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Já existe monitoramento para este critério no mês informado.',
+        )
+
+    data['criterio_id'] = criterio_id
+    data['mes_referencia'] = mes_referencia
+    old_value = _dump_model(monitoramento)
+    status_anterior = monitoramento.status_monitoramento
+    for field, value in data.items():
+        setattr(monitoramento, field, value)
+    acao = AcaoAuditEnum.STATUS_CHANGE if status_anterior != monitoramento.status_monitoramento else AcaoAuditEnum.UPDATE
+    registrar_log(
+        db,
+        entidade='monitoramento_criterio',
+        entidade_id=monitoramento.id,
+        acao=acao,
+        created_by=current_user.id,
+        old_value=old_value,
+        new_value=_dump_model(monitoramento),
+        programa_id=monitoramento.programa_id,
+        auditoria_ano_id=monitoramento.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(monitoramento)
+    return monitoramento
+
+
+@router.delete('/monitoramentos-criterio/{monitoramento_id}', response_model=MensagemOut)
+def remover_monitoramento_criterio(
+    monitoramento_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR)),
+) -> MensagemOut:
+    monitoramento = _buscar_monitoramento_criterio(db, monitoramento_id)
+    old_value = _dump_model(monitoramento)
+    db.delete(monitoramento)
+    registrar_log(
+        db,
+        entidade='monitoramento_criterio',
+        entidade_id=monitoramento_id,
+        acao=AcaoAuditEnum.DELETE,
+        created_by=current_user.id,
+        old_value=old_value,
+        programa_id=monitoramento.programa_id,
+        auditoria_ano_id=monitoramento.auditoria_ano_id,
+    )
+    db.commit()
+    return MensagemOut(mensagem='Monitoramento do critério removido com sucesso.')
+
+
+@router.get('/monitoramentos-criterio/{monitoramento_id}/notificacoes', response_model=list[NotificacaoMonitoramentoOut])
+def listar_notificacoes_monitoramento(
+    monitoramento_id: int,
+    status_notificacao: StatusNotificacaoEnum | None = Query(default=None),
+    responsavel_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[NotificacaoMonitoramentoOut]:
+    monitoramento = _buscar_monitoramento_criterio(db, monitoramento_id)
+    query = select(NotificacaoMonitoramento).where(NotificacaoMonitoramento.monitoramento_id == monitoramento.id)
+    if status_notificacao:
+        query = query.where(NotificacaoMonitoramento.status_notificacao == status_notificacao)
+    if responsavel_id:
+        query = query.where(NotificacaoMonitoramento.responsavel_id == responsavel_id)
+    if current_user.role == RoleEnum.RESPONSAVEL:
+        query = query.where(NotificacaoMonitoramento.responsavel_id == current_user.id)
+    return list(db.scalars(query.order_by(NotificacaoMonitoramento.updated_at.desc(), NotificacaoMonitoramento.id.desc())).all())
+
+
+@router.post(
+    '/monitoramentos-criterio/{monitoramento_id}/notificacoes',
+    response_model=NotificacaoMonitoramentoOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_notificacao_monitoramento(
+    monitoramento_id: int,
+    payload: NotificacaoMonitoramentoCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> NotificacaoMonitoramentoOut:
+    monitoramento = _buscar_monitoramento_criterio(db, monitoramento_id)
+    if payload.responsavel_id is not None:
+        _buscar_usuario(db, payload.responsavel_id)
+    notificacao = NotificacaoMonitoramento(
+        programa_id=monitoramento.programa_id,
+        auditoria_ano_id=monitoramento.auditoria_ano_id,
+        criterio_id=monitoramento.criterio_id,
+        monitoramento_id=monitoramento.id,
+        titulo=payload.titulo,
+        descricao=payload.descricao,
+        severidade=payload.severidade,
+        status_notificacao=payload.status_notificacao,
+        responsavel_id=payload.responsavel_id,
+        prazo=payload.prazo,
+        created_by=current_user.id,
+    )
+    db.add(notificacao)
+    db.flush()
+    registrar_log(
+        db,
+        entidade='notificacao_monitoramento',
+        entidade_id=notificacao.id,
+        acao=AcaoAuditEnum.CREATE,
+        created_by=current_user.id,
+        new_value=_dump_model(notificacao),
+        programa_id=notificacao.programa_id,
+        auditoria_ano_id=notificacao.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(notificacao)
+    return notificacao
+
+
+@router.put('/notificacoes-monitoramento/{notificacao_id}', response_model=NotificacaoMonitoramentoOut)
+def atualizar_notificacao_monitoramento(
+    notificacao_id: int,
+    payload: NotificacaoMonitoramentoUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> NotificacaoMonitoramentoOut:
+    notificacao = _buscar_notificacao_monitoramento(db, notificacao_id)
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Nenhum campo foi informado para atualização.')
+    if 'responsavel_id' in data and data['responsavel_id'] is not None:
+        _buscar_usuario(db, data['responsavel_id'])
+
+    old_value = _dump_model(notificacao)
+    status_anterior = notificacao.status_notificacao
+    for field, value in data.items():
+        setattr(notificacao, field, value)
+    acao = AcaoAuditEnum.STATUS_CHANGE if status_anterior != notificacao.status_notificacao else AcaoAuditEnum.UPDATE
+    registrar_log(
+        db,
+        entidade='notificacao_monitoramento',
+        entidade_id=notificacao.id,
+        acao=acao,
+        created_by=current_user.id,
+        old_value=old_value,
+        new_value=_dump_model(notificacao),
+        programa_id=notificacao.programa_id,
+        auditoria_ano_id=notificacao.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(notificacao)
+    return notificacao
+
+
+@router.patch('/notificacoes-monitoramento/{notificacao_id}/status', response_model=NotificacaoMonitoramentoOut)
+def patch_status_notificacao_monitoramento(
+    notificacao_id: int,
+    payload: NotificacaoMonitoramentoStatusPatch,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> NotificacaoMonitoramentoOut:
+    notificacao = _buscar_notificacao_monitoramento(db, notificacao_id)
+    if current_user.role == RoleEnum.RESPONSAVEL and notificacao.responsavel_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Você só pode atualizar notificações atribuídas a você.',
+        )
+    if current_user.role not in (RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR, RoleEnum.RESPONSAVEL):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Você não possui permissão para esta ação.')
+
+    old_value = _dump_model(notificacao)
+    notificacao.status_notificacao = payload.status_notificacao
+    registrar_log(
+        db,
+        entidade='notificacao_monitoramento',
+        entidade_id=notificacao.id,
+        acao=AcaoAuditEnum.STATUS_CHANGE,
+        created_by=current_user.id,
+        old_value=old_value,
+        new_value=_dump_model(notificacao),
+        programa_id=notificacao.programa_id,
+        auditoria_ano_id=notificacao.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(notificacao)
+    return notificacao
+
+
+@router.delete('/notificacoes-monitoramento/{notificacao_id}', response_model=MensagemOut)
+def remover_notificacao_monitoramento(
+    notificacao_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> MensagemOut:
+    notificacao = _buscar_notificacao_monitoramento(db, notificacao_id)
+    old_value = _dump_model(notificacao)
+    db.delete(notificacao)
+    registrar_log(
+        db,
+        entidade='notificacao_monitoramento',
+        entidade_id=notificacao_id,
+        acao=AcaoAuditEnum.DELETE,
+        created_by=current_user.id,
+        old_value=old_value,
+        programa_id=notificacao.programa_id,
+        auditoria_ano_id=notificacao.auditoria_ano_id,
+    )
+    db.commit()
+    return MensagemOut(mensagem='Notificação removida com sucesso.')
+
+
+@router.get('/notificacoes-monitoramento/{notificacao_id}/resolucoes', response_model=list[ResolucaoNotificacaoOut])
+def listar_resolucoes_notificacao(
+    notificacao_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[ResolucaoNotificacaoOut]:
+    notificacao = _buscar_notificacao_monitoramento(db, notificacao_id)
+    if current_user.role == RoleEnum.RESPONSAVEL and notificacao.responsavel_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Você só pode visualizar resoluções de notificações atribuídas a você.',
+        )
+    query = select(ResolucaoNotificacao).where(ResolucaoNotificacao.notificacao_id == notificacao.id)
+    return list(db.scalars(query.order_by(ResolucaoNotificacao.created_at.desc(), ResolucaoNotificacao.id.desc())).all())
+
+
+@router.post(
+    '/notificacoes-monitoramento/{notificacao_id}/resolucoes',
+    response_model=ResolucaoNotificacaoOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_resolucao_notificacao(
+    notificacao_id: int,
+    payload: ResolucaoNotificacaoCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ResolucaoNotificacaoOut:
+    notificacao = _buscar_notificacao_monitoramento(db, notificacao_id)
+    if current_user.role == RoleEnum.RESPONSAVEL and notificacao.responsavel_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Você só pode registrar resolução para notificações atribuídas a você.',
+        )
+    if current_user.role not in (RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR, RoleEnum.RESPONSAVEL):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Você não possui permissão para esta ação.')
+
+    resolucao = ResolucaoNotificacao(
+        programa_id=notificacao.programa_id,
+        notificacao_id=notificacao.id,
+        descricao=payload.descricao,
+        resultado=payload.resultado,
+        created_by=current_user.id,
+    )
+    old_notificacao = _dump_model(notificacao)
+    if notificacao.status_notificacao == StatusNotificacaoEnum.aberta:
+        notificacao.status_notificacao = StatusNotificacaoEnum.em_tratamento
+
+    db.add(resolucao)
+    db.flush()
+    registrar_log(
+        db,
+        entidade='resolucao_notificacao',
+        entidade_id=resolucao.id,
+        acao=AcaoAuditEnum.CREATE,
+        created_by=current_user.id,
+        new_value=_dump_model(resolucao),
+        programa_id=resolucao.programa_id,
+        auditoria_ano_id=notificacao.auditoria_ano_id,
+    )
+    if notificacao.status_notificacao != old_notificacao.get('status_notificacao'):
+        registrar_log(
+            db,
+            entidade='notificacao_monitoramento',
+            entidade_id=notificacao.id,
+            acao=AcaoAuditEnum.STATUS_CHANGE,
+            created_by=current_user.id,
+            old_value=old_notificacao,
+            new_value=_dump_model(notificacao),
+            programa_id=notificacao.programa_id,
+            auditoria_ano_id=notificacao.auditoria_ano_id,
+        )
+    db.commit()
+    db.refresh(resolucao)
+    return resolucao
+
+
+@router.delete('/resolucoes-notificacao/{resolucao_id}', response_model=MensagemOut)
+def remover_resolucao_notificacao(
+    resolucao_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> MensagemOut:
+    resolucao = _buscar_resolucao_notificacao(db, resolucao_id)
+    notificacao = _buscar_notificacao_monitoramento(db, resolucao.notificacao_id)
+    old_value = _dump_model(resolucao)
+    db.delete(resolucao)
+    registrar_log(
+        db,
+        entidade='resolucao_notificacao',
+        entidade_id=resolucao_id,
+        acao=AcaoAuditEnum.DELETE,
+        created_by=current_user.id,
+        old_value=old_value,
+        programa_id=resolucao.programa_id,
+        auditoria_ano_id=notificacao.auditoria_ano_id,
+    )
+    db.commit()
+    return MensagemOut(mensagem='Resolução removida com sucesso.')
 
 @router.get('/demandas', response_model=list[DemandaOut])
 def listar_demandas(

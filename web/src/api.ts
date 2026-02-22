@@ -138,6 +138,92 @@ export interface Evidencia {
   created_at: string;
 }
 
+export type StatusDocumento = 'em_construcao' | 'em_revisao' | 'aprovado' | 'reprovado';
+
+export const STATUS_DOCUMENTO_LABELS: Record<StatusDocumento, string> = {
+  em_construcao: 'Em Construção',
+  em_revisao: 'Em Revisão',
+  aprovado: 'Aprovado',
+  reprovado: 'Reprovado',
+};
+
+export interface DocumentoEvidencia {
+  id: number;
+  programa_id: number;
+  auditoria_ano_id: number;
+  evidencia_id: number;
+  titulo: string;
+  conteudo?: string | null;
+  versao: number;
+  status_documento: StatusDocumento;
+  observacoes_revisao?: string | null;
+  data_limite?: string | null;
+  responsavel_id?: number | null;
+  revisado_por_id?: number | null;
+  data_revisao?: string | null;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StatusMonitoramentoCriterio = 'sem_dados' | 'conforme' | 'alerta' | 'critico';
+
+export const STATUS_MONITORAMENTO_CRITERIO_LABELS: Record<StatusMonitoramentoCriterio, string> = {
+  sem_dados: 'Sem Dados',
+  conforme: 'Conforme',
+  alerta: 'Alerta',
+  critico: 'Crítico',
+};
+
+export interface MonitoramentoCriterio {
+  id: number;
+  programa_id: number;
+  auditoria_ano_id: number;
+  criterio_id: number;
+  mes_referencia: string;
+  status_monitoramento: StatusMonitoramentoCriterio;
+  observacoes?: string | null;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StatusNotificacaoMonitoramento = 'aberta' | 'em_tratamento' | 'resolvida' | 'cancelada';
+
+export const STATUS_NOTIFICACAO_MONITORAMENTO_LABELS: Record<StatusNotificacaoMonitoramento, string> = {
+  aberta: 'Aberta',
+  em_tratamento: 'Em Tratamento',
+  resolvida: 'Resolvida',
+  cancelada: 'Cancelada',
+};
+
+export interface NotificacaoMonitoramento {
+  id: number;
+  programa_id: number;
+  auditoria_ano_id: number;
+  criterio_id: number;
+  monitoramento_id: number;
+  titulo: string;
+  descricao?: string | null;
+  severidade: Prioridade;
+  status_notificacao: StatusNotificacaoMonitoramento;
+  responsavel_id?: number | null;
+  prazo?: string | null;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResolucaoNotificacao {
+  id: number;
+  programa_id: number;
+  notificacao_id: number;
+  descricao: string;
+  resultado?: string | null;
+  created_by: number;
+  created_at: string;
+}
+
 export type StatusAndamento =
   | 'aberta'
   | 'em_andamento'

@@ -25,5 +25,36 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     evidencias_criadas = relationship('Evidencia', back_populates='criador')
+    documentos_criados = relationship('DocumentoEvidencia', foreign_keys='DocumentoEvidencia.created_by', back_populates='criador')
+    documentos_responsavel = relationship(
+        'DocumentoEvidencia',
+        foreign_keys='DocumentoEvidencia.responsavel_id',
+        back_populates='responsavel',
+    )
+    documentos_revisados = relationship(
+        'DocumentoEvidencia',
+        foreign_keys='DocumentoEvidencia.revisado_por_id',
+        back_populates='revisor',
+    )
+    monitoramentos_criados = relationship(
+        'MonitoramentoCriterio',
+        foreign_keys='MonitoramentoCriterio.created_by',
+        back_populates='criador',
+    )
+    notificacoes_criadas = relationship(
+        'NotificacaoMonitoramento',
+        foreign_keys='NotificacaoMonitoramento.created_by',
+        back_populates='criador',
+    )
+    notificacoes_responsavel = relationship(
+        'NotificacaoMonitoramento',
+        foreign_keys='NotificacaoMonitoramento.responsavel_id',
+        back_populates='responsavel',
+    )
+    resolucoes_criadas = relationship(
+        'ResolucaoNotificacao',
+        foreign_keys='ResolucaoNotificacao.created_by',
+        back_populates='criador',
+    )
     demandas_responsavel = relationship('Demanda', back_populates='responsavel')
     logs = relationship('AuditLog', back_populates='autor')

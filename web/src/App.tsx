@@ -181,8 +181,14 @@ export default function App() {
                 <NavLink to="/avaliacoes" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Avaliações
                 </NavLink>
+                <NavLink to="/documentos" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+                  Documentos
+                </NavLink>
                 <NavLink to="/demandas" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Demandas
+                </NavLink>
+                <NavLink to="/monitoramentos" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+                  Monitoramentos
                 </NavLink>
                 <NavLink to="/cronograma" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Cronograma

@@ -8,6 +8,9 @@ from app.models.fsc import (
     PrioridadeEnum,
     StatusAndamentoEnum,
     StatusConformidadeEnum,
+    StatusDocumentoEnum,
+    StatusMonitoramentoCriterioEnum,
+    StatusNotificacaoEnum,
 )
 
 
@@ -34,6 +37,27 @@ PRIORIDADE_LABELS = {
     PrioridadeEnum.media: 'Média',
     PrioridadeEnum.alta: 'Alta',
     PrioridadeEnum.critica: 'Crítica',
+}
+
+STATUS_DOCUMENTO_LABELS = {
+    StatusDocumentoEnum.em_construcao: 'Em Construção',
+    StatusDocumentoEnum.em_revisao: 'Em Revisão',
+    StatusDocumentoEnum.aprovado: 'Aprovado',
+    StatusDocumentoEnum.reprovado: 'Reprovado',
+}
+
+STATUS_MONITORAMENTO_CRITERIO_LABELS = {
+    StatusMonitoramentoCriterioEnum.sem_dados: 'Sem Dados',
+    StatusMonitoramentoCriterioEnum.conforme: 'Conforme',
+    StatusMonitoramentoCriterioEnum.alerta: 'Alerta',
+    StatusMonitoramentoCriterioEnum.critico: 'Crítico',
+}
+
+STATUS_NOTIFICACAO_LABELS = {
+    StatusNotificacaoEnum.aberta: 'Aberta',
+    StatusNotificacaoEnum.em_tratamento: 'Em Tratamento',
+    StatusNotificacaoEnum.resolvida: 'Resolvida',
+    StatusNotificacaoEnum.cancelada: 'Cancelada',
 }
 
 
@@ -286,6 +310,139 @@ class EvidenciaOut(BaseModel):
     kind: EvidenciaKindEnum
     url_or_path: str
     observacoes: str | None
+    created_by: int
+    created_at: datetime
+
+
+class DocumentoEvidenciaCreate(BaseModel):
+    evidencia_id: int
+    titulo: str = Field(min_length=3, max_length=255)
+    conteudo: str | None = None
+    status_documento: StatusDocumentoEnum = StatusDocumentoEnum.em_construcao
+    observacoes_revisao: str | None = None
+    data_limite: date | None = None
+    responsavel_id: int | None = None
+
+
+class DocumentoEvidenciaUpdate(BaseModel):
+    titulo: str | None = Field(default=None, min_length=3, max_length=255)
+    conteudo: str | None = None
+    status_documento: StatusDocumentoEnum | None = None
+    observacoes_revisao: str | None = None
+    data_limite: date | None = None
+    responsavel_id: int | None = None
+
+
+class DocumentoEvidenciaStatusPatch(BaseModel):
+    status_documento: StatusDocumentoEnum
+    observacoes_revisao: str | None = None
+
+
+class DocumentoEvidenciaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    programa_id: int
+    auditoria_ano_id: int
+    evidencia_id: int
+    titulo: str
+    conteudo: str | None
+    versao: int
+    status_documento: StatusDocumentoEnum
+    observacoes_revisao: str | None
+    data_limite: date | None
+    responsavel_id: int | None
+    revisado_por_id: int | None
+    data_revisao: datetime | None
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class MonitoramentoCriterioCreate(BaseModel):
+    auditoria_ano_id: int
+    criterio_id: int
+    mes_referencia: date
+    status_monitoramento: StatusMonitoramentoCriterioEnum = StatusMonitoramentoCriterioEnum.sem_dados
+    observacoes: str | None = None
+
+
+class MonitoramentoCriterioUpdate(BaseModel):
+    criterio_id: int | None = None
+    mes_referencia: date | None = None
+    status_monitoramento: StatusMonitoramentoCriterioEnum | None = None
+    observacoes: str | None = None
+
+
+class MonitoramentoCriterioOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    programa_id: int
+    auditoria_ano_id: int
+    criterio_id: int
+    mes_referencia: date
+    status_monitoramento: StatusMonitoramentoCriterioEnum
+    observacoes: str | None
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class NotificacaoMonitoramentoCreate(BaseModel):
+    titulo: str = Field(min_length=3, max_length=255)
+    descricao: str | None = None
+    severidade: PrioridadeEnum = PrioridadeEnum.media
+    status_notificacao: StatusNotificacaoEnum = StatusNotificacaoEnum.aberta
+    responsavel_id: int | None = None
+    prazo: date | None = None
+
+
+class NotificacaoMonitoramentoUpdate(BaseModel):
+    titulo: str | None = Field(default=None, min_length=3, max_length=255)
+    descricao: str | None = None
+    severidade: PrioridadeEnum | None = None
+    status_notificacao: StatusNotificacaoEnum | None = None
+    responsavel_id: int | None = None
+    prazo: date | None = None
+
+
+class NotificacaoMonitoramentoStatusPatch(BaseModel):
+    status_notificacao: StatusNotificacaoEnum
+
+
+class NotificacaoMonitoramentoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    programa_id: int
+    auditoria_ano_id: int
+    criterio_id: int
+    monitoramento_id: int
+    titulo: str
+    descricao: str | None
+    severidade: PrioridadeEnum
+    status_notificacao: StatusNotificacaoEnum
+    responsavel_id: int | None
+    prazo: date | None
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResolucaoNotificacaoCreate(BaseModel):
+    descricao: str = Field(min_length=3)
+    resultado: str | None = None
+
+
+class ResolucaoNotificacaoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    programa_id: int
+    notificacao_id: int
+    descricao: str
+    resultado: str | None
     created_by: int
     created_at: datetime
 

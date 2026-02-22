@@ -36,6 +36,27 @@ class EvidenciaKindEnum(str, enum.Enum):
     texto = 'texto'
 
 
+class StatusDocumentoEnum(str, enum.Enum):
+    em_construcao = 'em_construcao'
+    em_revisao = 'em_revisao'
+    aprovado = 'aprovado'
+    reprovado = 'reprovado'
+
+
+class StatusMonitoramentoCriterioEnum(str, enum.Enum):
+    sem_dados = 'sem_dados'
+    conforme = 'conforme'
+    alerta = 'alerta'
+    critico = 'critico'
+
+
+class StatusNotificacaoEnum(str, enum.Enum):
+    aberta = 'aberta'
+    em_tratamento = 'em_tratamento'
+    resolvida = 'resolvida'
+    cancelada = 'cancelada'
+
+
 class ProgramaCertificacao(Base):
     __tablename__ = 'programas_certificacao'
 
@@ -53,6 +74,10 @@ class ProgramaCertificacao(Base):
     evidencias = relationship('Evidencia', back_populates='programa')
     demandas = relationship('Demanda', back_populates='programa')
     tipos_evidencia = relationship('EvidenceType', back_populates='programa')
+    documentos_evidencia = relationship('DocumentoEvidencia', back_populates='programa')
+    monitoramentos_criterio = relationship('MonitoramentoCriterio', back_populates='programa')
+    notificacoes_monitoramento = relationship('NotificacaoMonitoramento', back_populates='programa')
+    resolucoes_notificacao = relationship('ResolucaoNotificacao', back_populates='programa')
 
 
 class Principio(Base):
@@ -83,6 +108,8 @@ class Criterio(Base):
     principio = relationship('Principio', back_populates='criterios')
     indicadores = relationship('Indicador', back_populates='criterio', cascade='all, delete-orphan')
     tipos_evidencia = relationship('EvidenceType', back_populates='criterio')
+    monitoramentos_criterio = relationship('MonitoramentoCriterio', back_populates='criterio')
+    notificacoes_monitoramento = relationship('NotificacaoMonitoramento', back_populates='criterio')
 
 
 class Indicador(Base):
@@ -118,6 +145,9 @@ class AuditoriaAno(Base):
 
     programa = relationship('ProgramaCertificacao', back_populates='auditorias')
     avaliacoes = relationship('AvaliacaoIndicador', back_populates='auditoria', cascade='all, delete-orphan')
+    documentos_evidencia = relationship('DocumentoEvidencia', back_populates='auditoria', cascade='all, delete-orphan')
+    monitoramentos_criterio = relationship('MonitoramentoCriterio', back_populates='auditoria', cascade='all, delete-orphan')
+    notificacoes_monitoramento = relationship('NotificacaoMonitoramento', back_populates='auditoria', cascade='all, delete-orphan')
 
 
 class AvaliacaoIndicador(Base):
@@ -202,6 +232,142 @@ class Evidencia(Base):
     avaliacao = relationship('AvaliacaoIndicador', back_populates='evidencias')
     tipo_evidencia = relationship('EvidenceType', back_populates='evidencias')
     criador = relationship('User', back_populates='evidencias_criadas')
+    documentos = relationship('DocumentoEvidencia', back_populates='evidencia', cascade='all, delete-orphan')
+
+
+class DocumentoEvidencia(Base):
+    __tablename__ = 'documentos_evidencia'
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    programa_id: Mapped[int] = mapped_column(ForeignKey('programas_certificacao.id', ondelete='RESTRICT'), nullable=False, index=True)
+    auditoria_ano_id: Mapped[int] = mapped_column(ForeignKey('auditorias_ano.id', ondelete='CASCADE'), nullable=False, index=True)
+    evidencia_id: Mapped[int] = mapped_column(ForeignKey('evidencias.id', ondelete='CASCADE'), nullable=False, index=True)
+    titulo: Mapped[str] = mapped_column(String(255), nullable=False)
+    conteudo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    versao: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default='1')
+    status_documento: Mapped[StatusDocumentoEnum] = mapped_column(
+        Enum(StatusDocumentoEnum, name='status_documento_enum', native_enum=False),
+        nullable=False,
+        default=StatusDocumentoEnum.em_construcao,
+        server_default=StatusDocumentoEnum.em_construcao.value,
+    )
+    observacoes_revisao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    data_limite: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    responsavel_id: Mapped[int | None] = mapped_column(ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True, index=True)
+    revisado_por_id: Mapped[int | None] = mapped_column(ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True, index=True)
+    data_revisao: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey('usuarios.id', ondelete='RESTRICT'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    programa = relationship('ProgramaCertificacao', back_populates='documentos_evidencia')
+    auditoria = relationship('AuditoriaAno', back_populates='documentos_evidencia')
+    evidencia = relationship('Evidencia', back_populates='documentos')
+    criador = relationship('User', foreign_keys=[created_by], back_populates='documentos_criados')
+    responsavel = relationship('User', foreign_keys=[responsavel_id], back_populates='documentos_responsavel')
+    revisor = relationship('User', foreign_keys=[revisado_por_id], back_populates='documentos_revisados')
+
+
+class MonitoramentoCriterio(Base):
+    __tablename__ = 'monitoramentos_criterio'
+    __table_args__ = (
+        UniqueConstraint(
+            'programa_id',
+            'auditoria_ano_id',
+            'criterio_id',
+            'mes_referencia',
+            name='uq_monitoramento_criterio_mes',
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    programa_id: Mapped[int] = mapped_column(ForeignKey('programas_certificacao.id', ondelete='RESTRICT'), nullable=False, index=True)
+    auditoria_ano_id: Mapped[int] = mapped_column(ForeignKey('auditorias_ano.id', ondelete='CASCADE'), nullable=False, index=True)
+    criterio_id: Mapped[int] = mapped_column(ForeignKey('criterios.id', ondelete='CASCADE'), nullable=False, index=True)
+    mes_referencia: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    status_monitoramento: Mapped[StatusMonitoramentoCriterioEnum] = mapped_column(
+        Enum(StatusMonitoramentoCriterioEnum, name='status_monitoramento_criterio_enum', native_enum=False),
+        nullable=False,
+        default=StatusMonitoramentoCriterioEnum.sem_dados,
+        server_default=StatusMonitoramentoCriterioEnum.sem_dados.value,
+    )
+    observacoes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey('usuarios.id', ondelete='RESTRICT'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    programa = relationship('ProgramaCertificacao', back_populates='monitoramentos_criterio')
+    auditoria = relationship('AuditoriaAno', back_populates='monitoramentos_criterio')
+    criterio = relationship('Criterio', back_populates='monitoramentos_criterio')
+    criador = relationship('User', foreign_keys=[created_by], back_populates='monitoramentos_criados')
+    notificacoes = relationship('NotificacaoMonitoramento', back_populates='monitoramento', cascade='all, delete-orphan')
+
+
+class NotificacaoMonitoramento(Base):
+    __tablename__ = 'notificacoes_monitoramento'
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    programa_id: Mapped[int] = mapped_column(ForeignKey('programas_certificacao.id', ondelete='RESTRICT'), nullable=False, index=True)
+    auditoria_ano_id: Mapped[int] = mapped_column(ForeignKey('auditorias_ano.id', ondelete='CASCADE'), nullable=False, index=True)
+    criterio_id: Mapped[int] = mapped_column(ForeignKey('criterios.id', ondelete='CASCADE'), nullable=False, index=True)
+    monitoramento_id: Mapped[int] = mapped_column(ForeignKey('monitoramentos_criterio.id', ondelete='CASCADE'), nullable=False, index=True)
+    titulo: Mapped[str] = mapped_column(String(255), nullable=False)
+    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severidade: Mapped[PrioridadeEnum] = mapped_column(
+        Enum(PrioridadeEnum, name='prioridade_enum', native_enum=False),
+        nullable=False,
+        default=PrioridadeEnum.media,
+    )
+    status_notificacao: Mapped[StatusNotificacaoEnum] = mapped_column(
+        Enum(StatusNotificacaoEnum, name='status_notificacao_monitoramento_enum', native_enum=False),
+        nullable=False,
+        default=StatusNotificacaoEnum.aberta,
+        server_default=StatusNotificacaoEnum.aberta.value,
+    )
+    responsavel_id: Mapped[int | None] = mapped_column(ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True, index=True)
+    prazo: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey('usuarios.id', ondelete='RESTRICT'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    programa = relationship('ProgramaCertificacao', back_populates='notificacoes_monitoramento')
+    auditoria = relationship('AuditoriaAno', back_populates='notificacoes_monitoramento')
+    criterio = relationship('Criterio', back_populates='notificacoes_monitoramento')
+    monitoramento = relationship('MonitoramentoCriterio', back_populates='notificacoes')
+    criador = relationship('User', foreign_keys=[created_by], back_populates='notificacoes_criadas')
+    responsavel = relationship('User', foreign_keys=[responsavel_id], back_populates='notificacoes_responsavel')
+    resolucoes = relationship('ResolucaoNotificacao', back_populates='notificacao', cascade='all, delete-orphan')
+
+
+class ResolucaoNotificacao(Base):
+    __tablename__ = 'resolucoes_notificacao'
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    programa_id: Mapped[int] = mapped_column(ForeignKey('programas_certificacao.id', ondelete='RESTRICT'), nullable=False, index=True)
+    notificacao_id: Mapped[int] = mapped_column(ForeignKey('notificacoes_monitoramento.id', ondelete='CASCADE'), nullable=False, index=True)
+    descricao: Mapped[str] = mapped_column(Text, nullable=False)
+    resultado: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey('usuarios.id', ondelete='RESTRICT'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    programa = relationship('ProgramaCertificacao', back_populates='resolucoes_notificacao')
+    notificacao = relationship('NotificacaoMonitoramento', back_populates='resolucoes')
+    criador = relationship('User', foreign_keys=[created_by], back_populates='resolucoes_criadas')
 
 
 class Demanda(Base):

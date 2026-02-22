@@ -10,8 +10,10 @@ import Cronograma from './pages/Cronograma';
 import Dashboard from './pages/Dashboard';
 import Demandas from './pages/Demandas';
 import DetalheAvaliacao from './pages/DetalheAvaliacao';
+import Documentos from './pages/Documentos';
 import Direcionadores from './pages/Direcionadores';
 import Login from './pages/Login';
+import Monitoramentos from './pages/Monitoramentos';
 
 type Props = {
   token: string | null;
@@ -114,6 +116,24 @@ export default function AppRoutes({
         element={
           <ProtectedRoute token={token}>
             <Demandas programaId={programaId} auditoriaId={auditoriaId} />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/monitoramentos"
+        element={
+          <ProtectedRoute token={token}>
+            <Monitoramentos programaId={programaId} auditoriaId={auditoriaId} />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/documentos"
+        element={
+          <ProtectedRoute token={token}>
+            <Documentos programaId={programaId} auditoriaId={auditoriaId} />
           </ProtectedRoute>
         }
       />
