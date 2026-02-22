@@ -190,6 +190,9 @@ export default function App() {
                 <NavLink to="/monitoramentos" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Monitoramentos
                 </NavLink>
+                <NavLink to="/analises-nc" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+                  Analises NC
+                </NavLink>
                 <NavLink to="/cronograma" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Cronograma
                 </NavLink>

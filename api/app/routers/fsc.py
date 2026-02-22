@@ -13,6 +13,7 @@ from app.core.security import get_current_user, hash_password, verify_password
 from app.db.session import get_db
 from app.models.auditlog import AcaoAuditEnum, AuditLog
 from app.models.fsc import (
+    AnaliseNaoConformidade,
     AuditoriaAno,
     AvaliacaoIndicador,
     ConfiguracaoSistema,
@@ -29,6 +30,7 @@ from app.models.fsc import (
     ProgramaCertificacao,
     Principio,
     StatusAndamentoEnum,
+    StatusAnaliseNcEnum,
     StatusConformidadeEnum,
     StatusDocumentoEnum,
     StatusMonitoramentoCriterioEnum,
@@ -36,6 +38,10 @@ from app.models.fsc import (
 )
 from app.models.user import RoleEnum, User
 from app.schemas.fsc import (
+    AnaliseNcCreate,
+    AnaliseNcOut,
+    AnaliseNcStatusPatch,
+    AnaliseNcUpdate,
     AuditLogOut,
     AuditoriaCreate,
     AuditoriaOut,
@@ -98,6 +104,12 @@ STATUS_DEMANDA_ATIVA = (
 )
 
 STATUS_AVALIACAO_CRONOGRAMA = (
+    StatusConformidadeEnum.nc_menor,
+    StatusConformidadeEnum.nc_maior,
+    StatusConformidadeEnum.oportunidade_melhoria,
+)
+
+STATUS_AVALIACAO_ANALISE_NC = (
     StatusConformidadeEnum.nc_menor,
     StatusConformidadeEnum.nc_maior,
     StatusConformidadeEnum.oportunidade_melhoria,
@@ -337,6 +349,68 @@ def _buscar_demanda(db: Session, demanda_id: int) -> Demanda:
     if not demanda:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Demanda não encontrada.')
     return demanda
+
+
+def _buscar_analise_nc(db: Session, analise_id: int) -> AnaliseNaoConformidade:
+    analise = db.get(AnaliseNaoConformidade, analise_id)
+    if not analise:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Análise de não conformidade não encontrada.')
+    return analise
+
+
+def _validar_status_avaliacao_analise(avaliacao: AvaliacaoIndicador) -> None:
+    if avaliacao.status_conformidade not in STATUS_AVALIACAO_ANALISE_NC:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='A análise só pode ser vinculada a NC Menor, NC Maior ou Oportunidade de Melhoria.',
+        )
+
+
+def _validar_vinculos_analise_nc(
+    db: Session,
+    programa_id: int,
+    auditoria_ano_id: int,
+    avaliacao_id: int,
+    demanda_id: int | None,
+) -> tuple[AuditoriaAno, AvaliacaoIndicador, Demanda | None]:
+    auditoria = _buscar_auditoria(db, auditoria_ano_id)
+    avaliacao = _buscar_avaliacao(db, avaliacao_id)
+    _validar_mesmo_programa(programa_id, auditoria.programa_id, 'analise nc (auditoria)')
+    _validar_mesmo_programa(programa_id, avaliacao.programa_id, 'analise nc (avaliacao)')
+    if avaliacao.auditoria_ano_id != auditoria_ano_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='A avaliação informada não pertence à auditoria selecionada.',
+        )
+    _validar_status_avaliacao_analise(avaliacao)
+
+    demanda = None
+    if demanda_id is not None:
+        demanda = _buscar_demanda(db, demanda_id)
+        _validar_mesmo_programa(programa_id, demanda.programa_id, 'analise nc (demanda)')
+        if demanda.avaliacao_id != avaliacao_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='A demanda informada não pertence à avaliação selecionada.',
+            )
+    return auditoria, avaliacao, demanda
+
+
+def _validar_campos_analise_nc(status_analise: StatusAnaliseNcEnum, causa_raiz: str | None, acao_corretiva: str | None) -> None:
+    if status_analise == StatusAnaliseNcEnum.concluida:
+        if not _texto_preenchido(causa_raiz) or not _texto_preenchido(acao_corretiva):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Para concluir a análise, informe causa_raiz e acao_corretiva.',
+            )
+
+
+def _responsavel_pode_acessar_analise(analise: AnaliseNaoConformidade, user_id: int) -> bool:
+    if analise.responsavel_id == user_id:
+        return True
+    if analise.demanda and analise.demanda.responsavel_id == user_id:
+        return True
+    return False
 
 
 def _normalizar_mes_referencia(mes_referencia: date) -> date:
@@ -2328,6 +2402,258 @@ def remover_resolucao_notificacao(
     )
     db.commit()
     return MensagemOut(mensagem='Resolução removida com sucesso.')
+
+
+@router.get('/analises-nc', response_model=list[AnaliseNcOut])
+def listar_analises_nc(
+    programa_id: int | None = Query(default=None),
+    auditoria_id: int | None = Query(default=None),
+    avaliacao_id: int | None = Query(default=None),
+    demanda_id: int | None = Query(default=None),
+    status_analise: StatusAnaliseNcEnum | None = Query(default=None),
+    responsavel_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[AnaliseNcOut]:
+    query = (
+        select(AnaliseNaoConformidade)
+        .options(joinedload(AnaliseNaoConformidade.demanda))
+        .order_by(AnaliseNaoConformidade.updated_at.desc(), AnaliseNaoConformidade.id.desc())
+    )
+    if programa_id:
+        query = query.where(AnaliseNaoConformidade.programa_id == programa_id)
+    if auditoria_id:
+        query = query.where(AnaliseNaoConformidade.auditoria_ano_id == auditoria_id)
+    if avaliacao_id:
+        query = query.where(AnaliseNaoConformidade.avaliacao_id == avaliacao_id)
+    if demanda_id:
+        query = query.where(AnaliseNaoConformidade.demanda_id == demanda_id)
+    if status_analise:
+        query = query.where(AnaliseNaoConformidade.status_analise == status_analise)
+    if responsavel_id:
+        query = query.where(AnaliseNaoConformidade.responsavel_id == responsavel_id)
+    if current_user.role == RoleEnum.RESPONSAVEL:
+        demandas_responsavel_subq = select(Demanda.id).where(Demanda.responsavel_id == current_user.id)
+        query = query.where(
+            or_(
+                AnaliseNaoConformidade.responsavel_id == current_user.id,
+                AnaliseNaoConformidade.demanda_id.in_(demandas_responsavel_subq),
+            )
+        )
+    return list(db.scalars(query).all())
+
+
+@router.post('/analises-nc', response_model=AnaliseNcOut, status_code=status.HTTP_201_CREATED)
+def criar_analise_nc(
+    payload: AnaliseNcCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> AnaliseNcOut:
+    auditoria = _buscar_auditoria(db, payload.auditoria_ano_id)
+    _, _, _ = _validar_vinculos_analise_nc(
+        db,
+        auditoria.programa_id,
+        payload.auditoria_ano_id,
+        payload.avaliacao_id,
+        payload.demanda_id,
+    )
+    if payload.responsavel_id is not None:
+        _buscar_usuario(db, payload.responsavel_id)
+    _validar_campos_analise_nc(payload.status_analise, payload.causa_raiz, payload.acao_corretiva)
+
+    analise = AnaliseNaoConformidade(
+        programa_id=auditoria.programa_id,
+        auditoria_ano_id=payload.auditoria_ano_id,
+        avaliacao_id=payload.avaliacao_id,
+        demanda_id=payload.demanda_id,
+        titulo_problema=payload.titulo_problema,
+        contexto=payload.contexto,
+        porque_1=payload.porque_1,
+        porque_2=payload.porque_2,
+        porque_3=payload.porque_3,
+        porque_4=payload.porque_4,
+        porque_5=payload.porque_5,
+        causa_raiz=payload.causa_raiz,
+        acao_corretiva=payload.acao_corretiva,
+        swot_forcas=payload.swot_forcas,
+        swot_fraquezas=payload.swot_fraquezas,
+        swot_oportunidades=payload.swot_oportunidades,
+        swot_ameacas=payload.swot_ameacas,
+        status_analise=payload.status_analise,
+        responsavel_id=payload.responsavel_id,
+        created_by=current_user.id,
+    )
+    db.add(analise)
+    db.flush()
+    registrar_log(
+        db,
+        entidade='analise_nc',
+        entidade_id=analise.id,
+        acao=AcaoAuditEnum.CREATE,
+        created_by=current_user.id,
+        new_value=_dump_model(analise),
+        programa_id=analise.programa_id,
+        auditoria_ano_id=analise.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(analise)
+    return analise
+
+
+@router.get('/analises-nc/{analise_id}', response_model=AnaliseNcOut)
+def obter_analise_nc(
+    analise_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AnaliseNcOut:
+    analise = db.scalar(
+        select(AnaliseNaoConformidade)
+        .options(joinedload(AnaliseNaoConformidade.demanda))
+        .where(AnaliseNaoConformidade.id == analise_id)
+    )
+    if not analise:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Análise de não conformidade não encontrada.')
+    if current_user.role == RoleEnum.RESPONSAVEL and not _responsavel_pode_acessar_analise(analise, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Você só pode visualizar análises atribuídas a você.',
+        )
+    return analise
+
+
+@router.put('/analises-nc/{analise_id}', response_model=AnaliseNcOut)
+def atualizar_analise_nc(
+    analise_id: int,
+    payload: AnaliseNcUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> AnaliseNcOut:
+    analise = _buscar_analise_nc(db, analise_id)
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Nenhum campo foi informado para atualização.')
+
+    auditoria_ano_id = data.get('auditoria_ano_id', analise.auditoria_ano_id)
+    avaliacao_id = data.get('avaliacao_id', analise.avaliacao_id)
+    demanda_id = data['demanda_id'] if 'demanda_id' in data else analise.demanda_id
+    _validar_vinculos_analise_nc(db, analise.programa_id, auditoria_ano_id, avaliacao_id, demanda_id)
+    if 'responsavel_id' in data and data['responsavel_id'] is not None:
+        _buscar_usuario(db, data['responsavel_id'])
+    status_novo = data.get('status_analise', analise.status_analise)
+    causa_nova = data.get('causa_raiz', analise.causa_raiz)
+    acao_nova = data.get('acao_corretiva', analise.acao_corretiva)
+    _validar_campos_analise_nc(status_novo, causa_nova, acao_nova)
+
+    old_value = _dump_model(analise)
+    status_anterior = analise.status_analise
+    for field, value in data.items():
+        setattr(analise, field, value)
+    acao = AcaoAuditEnum.STATUS_CHANGE if status_anterior != analise.status_analise else AcaoAuditEnum.UPDATE
+    registrar_log(
+        db,
+        entidade='analise_nc',
+        entidade_id=analise.id,
+        acao=acao,
+        created_by=current_user.id,
+        old_value=old_value,
+        new_value=_dump_model(analise),
+        programa_id=analise.programa_id,
+        auditoria_ano_id=analise.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(analise)
+    return analise
+
+
+@router.patch('/analises-nc/{analise_id}/status', response_model=AnaliseNcOut)
+def atualizar_status_analise_nc(
+    analise_id: int,
+    payload: AnaliseNcStatusPatch,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AnaliseNcOut:
+    analise = db.scalar(
+        select(AnaliseNaoConformidade)
+        .options(joinedload(AnaliseNaoConformidade.demanda))
+        .where(AnaliseNaoConformidade.id == analise_id)
+    )
+    if not analise:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Análise de não conformidade não encontrada.')
+    if current_user.role == RoleEnum.RESPONSAVEL and not _responsavel_pode_acessar_analise(analise, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Você só pode atualizar análises atribuídas a você.',
+        )
+    if current_user.role not in (RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR, RoleEnum.RESPONSAVEL):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Você não possui permissão para esta ação.')
+    _validar_campos_analise_nc(payload.status_analise, analise.causa_raiz, analise.acao_corretiva)
+
+    old_value = _dump_model(analise)
+    analise.status_analise = payload.status_analise
+    registrar_log(
+        db,
+        entidade='analise_nc',
+        entidade_id=analise.id,
+        acao=AcaoAuditEnum.STATUS_CHANGE,
+        created_by=current_user.id,
+        old_value=old_value,
+        new_value=_dump_model(analise),
+        programa_id=analise.programa_id,
+        auditoria_ano_id=analise.auditoria_ano_id,
+    )
+    db.commit()
+    db.refresh(analise)
+    return analise
+
+
+@router.delete('/analises-nc/{analise_id}', response_model=MensagemOut)
+def remover_analise_nc(
+    analise_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR)),
+) -> MensagemOut:
+    analise = _buscar_analise_nc(db, analise_id)
+    old_value = _dump_model(analise)
+    db.delete(analise)
+    registrar_log(
+        db,
+        entidade='analise_nc',
+        entidade_id=analise_id,
+        acao=AcaoAuditEnum.DELETE,
+        created_by=current_user.id,
+        old_value=old_value,
+        programa_id=analise.programa_id,
+        auditoria_ano_id=analise.auditoria_ano_id,
+    )
+    db.commit()
+    return MensagemOut(mensagem='Análise de não conformidade removida com sucesso.')
+
+
+@router.get('/analises-nc/{analise_id}/logs', response_model=list[AuditLogOut])
+def listar_logs_analise_nc(
+    analise_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[AuditLogOut]:
+    analise = db.scalar(
+        select(AnaliseNaoConformidade)
+        .options(joinedload(AnaliseNaoConformidade.demanda))
+        .where(AnaliseNaoConformidade.id == analise_id)
+    )
+    if not analise:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Análise de não conformidade não encontrada.')
+    if current_user.role == RoleEnum.RESPONSAVEL and not _responsavel_pode_acessar_analise(analise, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Você só pode visualizar logs das análises atribuídas a você.',
+        )
+    logs = db.scalars(
+        select(AuditLog)
+        .where(AuditLog.entidade == 'analise_nc', AuditLog.entidade_id == analise.id)
+        .order_by(AuditLog.created_at.desc())
+    ).all()
+    return list(logs)
+
 
 @router.get('/demandas', response_model=list[DemandaOut])
 def listar_demandas(

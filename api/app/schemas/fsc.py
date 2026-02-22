@@ -6,6 +6,7 @@ from app.models.auditlog import AcaoAuditEnum
 from app.models.fsc import (
     EvidenciaKindEnum,
     PrioridadeEnum,
+    StatusAnaliseNcEnum,
     StatusAndamentoEnum,
     StatusConformidadeEnum,
     StatusDocumentoEnum,
@@ -58,6 +59,12 @@ STATUS_NOTIFICACAO_LABELS = {
     StatusNotificacaoEnum.em_tratamento: 'Em Tratamento',
     StatusNotificacaoEnum.resolvida: 'Resolvida',
     StatusNotificacaoEnum.cancelada: 'Cancelada',
+}
+
+STATUS_ANALISE_NC_LABELS = {
+    StatusAnaliseNcEnum.aberta: 'Aberta',
+    StatusAnaliseNcEnum.em_analise: 'Em Analise',
+    StatusAnaliseNcEnum.concluida: 'Concluida',
 }
 
 
@@ -445,6 +452,80 @@ class ResolucaoNotificacaoOut(BaseModel):
     resultado: str | None
     created_by: int
     created_at: datetime
+
+
+class AnaliseNcCreate(BaseModel):
+    auditoria_ano_id: int
+    avaliacao_id: int
+    demanda_id: int | None = None
+    titulo_problema: str = Field(min_length=3, max_length=255)
+    contexto: str | None = None
+    porque_1: str | None = None
+    porque_2: str | None = None
+    porque_3: str | None = None
+    porque_4: str | None = None
+    porque_5: str | None = None
+    causa_raiz: str | None = None
+    acao_corretiva: str | None = None
+    swot_forcas: str | None = None
+    swot_fraquezas: str | None = None
+    swot_oportunidades: str | None = None
+    swot_ameacas: str | None = None
+    status_analise: StatusAnaliseNcEnum = StatusAnaliseNcEnum.aberta
+    responsavel_id: int | None = None
+
+
+class AnaliseNcUpdate(BaseModel):
+    auditoria_ano_id: int | None = None
+    avaliacao_id: int | None = None
+    demanda_id: int | None = None
+    titulo_problema: str | None = Field(default=None, min_length=3, max_length=255)
+    contexto: str | None = None
+    porque_1: str | None = None
+    porque_2: str | None = None
+    porque_3: str | None = None
+    porque_4: str | None = None
+    porque_5: str | None = None
+    causa_raiz: str | None = None
+    acao_corretiva: str | None = None
+    swot_forcas: str | None = None
+    swot_fraquezas: str | None = None
+    swot_oportunidades: str | None = None
+    swot_ameacas: str | None = None
+    status_analise: StatusAnaliseNcEnum | None = None
+    responsavel_id: int | None = None
+
+
+class AnaliseNcStatusPatch(BaseModel):
+    status_analise: StatusAnaliseNcEnum
+
+
+class AnaliseNcOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    programa_id: int
+    auditoria_ano_id: int
+    avaliacao_id: int
+    demanda_id: int | None
+    titulo_problema: str
+    contexto: str | None
+    porque_1: str | None
+    porque_2: str | None
+    porque_3: str | None
+    porque_4: str | None
+    porque_5: str | None
+    causa_raiz: str | None
+    acao_corretiva: str | None
+    swot_forcas: str | None
+    swot_fraquezas: str | None
+    swot_oportunidades: str | None
+    swot_ameacas: str | None
+    status_analise: StatusAnaliseNcEnum
+    responsavel_id: int | None
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class DemandaCreate(BaseModel):

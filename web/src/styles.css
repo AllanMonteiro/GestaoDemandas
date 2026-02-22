@@ -239,6 +239,10 @@ a {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.five-col {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .form-row {
   display: grid;
   gap: 6px;
@@ -1444,7 +1448,8 @@ button:disabled {
 
   .two-col,
   .three-col,
-  .four-col {
+  .four-col,
+  .five-col {
     grid-template-columns: 1fr;
   }
 

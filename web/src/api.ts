@@ -224,6 +224,40 @@ export interface ResolucaoNotificacao {
   created_at: string;
 }
 
+export type StatusAnaliseNc = 'aberta' | 'em_analise' | 'concluida';
+
+export const STATUS_ANALISE_NC_LABELS: Record<StatusAnaliseNc, string> = {
+  aberta: 'Aberta',
+  em_analise: 'Em Analise',
+  concluida: 'Concluida',
+};
+
+export interface AnaliseNc {
+  id: number;
+  programa_id: number;
+  auditoria_ano_id: number;
+  avaliacao_id: number;
+  demanda_id?: number | null;
+  titulo_problema: string;
+  contexto?: string | null;
+  porque_1?: string | null;
+  porque_2?: string | null;
+  porque_3?: string | null;
+  porque_4?: string | null;
+  porque_5?: string | null;
+  causa_raiz?: string | null;
+  acao_corretiva?: string | null;
+  swot_forcas?: string | null;
+  swot_fraquezas?: string | null;
+  swot_oportunidades?: string | null;
+  swot_ameacas?: string | null;
+  status_analise: StatusAnaliseNc;
+  responsavel_id?: number | null;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export type StatusAndamento =
   | 'aberta'
   | 'em_andamento'

@@ -56,5 +56,15 @@ class User(Base):
         foreign_keys='ResolucaoNotificacao.created_by',
         back_populates='criador',
     )
+    analises_nc_criadas = relationship(
+        'AnaliseNaoConformidade',
+        foreign_keys='AnaliseNaoConformidade.created_by',
+        back_populates='criador',
+    )
+    analises_nc_responsavel = relationship(
+        'AnaliseNaoConformidade',
+        foreign_keys='AnaliseNaoConformidade.responsavel_id',
+        back_populates='responsavel',
+    )
     demandas_responsavel = relationship('Demanda', back_populates='responsavel')
     logs = relationship('AuditLog', back_populates='autor')

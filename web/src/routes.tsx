@@ -13,6 +13,7 @@ import DetalheAvaliacao from './pages/DetalheAvaliacao';
 import Documentos from './pages/Documentos';
 import Direcionadores from './pages/Direcionadores';
 import Login from './pages/Login';
+import AnalisesNc from './pages/AnalisesNc';
 import Monitoramentos from './pages/Monitoramentos';
 
 type Props = {
@@ -125,6 +126,15 @@ export default function AppRoutes({
         element={
           <ProtectedRoute token={token}>
             <Monitoramentos programaId={programaId} auditoriaId={auditoriaId} />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/analises-nc"
+        element={
+          <ProtectedRoute token={token}>
+            <AnalisesNc programaId={programaId} auditoriaId={auditoriaId} />
           </ProtectedRoute>
         }
       />

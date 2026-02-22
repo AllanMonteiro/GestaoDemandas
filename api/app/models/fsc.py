@@ -57,6 +57,12 @@ class StatusNotificacaoEnum(str, enum.Enum):
     cancelada = 'cancelada'
 
 
+class StatusAnaliseNcEnum(str, enum.Enum):
+    aberta = 'aberta'
+    em_analise = 'em_analise'
+    concluida = 'concluida'
+
+
 class ProgramaCertificacao(Base):
     __tablename__ = 'programas_certificacao'
 
@@ -78,6 +84,7 @@ class ProgramaCertificacao(Base):
     monitoramentos_criterio = relationship('MonitoramentoCriterio', back_populates='programa')
     notificacoes_monitoramento = relationship('NotificacaoMonitoramento', back_populates='programa')
     resolucoes_notificacao = relationship('ResolucaoNotificacao', back_populates='programa')
+    analises_nc = relationship('AnaliseNaoConformidade', back_populates='programa')
 
 
 class Principio(Base):
@@ -148,6 +155,7 @@ class AuditoriaAno(Base):
     documentos_evidencia = relationship('DocumentoEvidencia', back_populates='auditoria', cascade='all, delete-orphan')
     monitoramentos_criterio = relationship('MonitoramentoCriterio', back_populates='auditoria', cascade='all, delete-orphan')
     notificacoes_monitoramento = relationship('NotificacaoMonitoramento', back_populates='auditoria', cascade='all, delete-orphan')
+    analises_nc = relationship('AnaliseNaoConformidade', back_populates='auditoria', cascade='all, delete-orphan')
 
 
 class AvaliacaoIndicador(Base):
@@ -176,6 +184,7 @@ class AvaliacaoIndicador(Base):
     auditoria = relationship('AuditoriaAno', back_populates='avaliacoes')
     evidencias = relationship('Evidencia', back_populates='avaliacao', cascade='all, delete-orphan')
     demandas = relationship('Demanda', back_populates='avaliacao', cascade='all, delete-orphan')
+    analises_nc = relationship('AnaliseNaoConformidade', back_populates='avaliacao', cascade='all, delete-orphan')
 
 
 class EvidenceType(Base):
@@ -370,6 +379,71 @@ class ResolucaoNotificacao(Base):
     criador = relationship('User', foreign_keys=[created_by], back_populates='resolucoes_criadas')
 
 
+class AnaliseNaoConformidade(Base):
+    __tablename__ = 'analises_nao_conformidade'
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    programa_id: Mapped[int] = mapped_column(
+        ForeignKey('programas_certificacao.id', ondelete='RESTRICT'),
+        nullable=False,
+        index=True,
+    )
+    auditoria_ano_id: Mapped[int] = mapped_column(
+        ForeignKey('auditorias_ano.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    avaliacao_id: Mapped[int] = mapped_column(
+        ForeignKey('avaliacoes_indicador.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    demanda_id: Mapped[int | None] = mapped_column(
+        ForeignKey('demandas.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    titulo_problema: Mapped[str] = mapped_column(String(255), nullable=False)
+    contexto: Mapped[str | None] = mapped_column(Text, nullable=True)
+    porque_1: Mapped[str | None] = mapped_column(Text, nullable=True)
+    porque_2: Mapped[str | None] = mapped_column(Text, nullable=True)
+    porque_3: Mapped[str | None] = mapped_column(Text, nullable=True)
+    porque_4: Mapped[str | None] = mapped_column(Text, nullable=True)
+    porque_5: Mapped[str | None] = mapped_column(Text, nullable=True)
+    causa_raiz: Mapped[str | None] = mapped_column(Text, nullable=True)
+    acao_corretiva: Mapped[str | None] = mapped_column(Text, nullable=True)
+    swot_forcas: Mapped[str | None] = mapped_column(Text, nullable=True)
+    swot_fraquezas: Mapped[str | None] = mapped_column(Text, nullable=True)
+    swot_oportunidades: Mapped[str | None] = mapped_column(Text, nullable=True)
+    swot_ameacas: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status_analise: Mapped[StatusAnaliseNcEnum] = mapped_column(
+        Enum(StatusAnaliseNcEnum, name='status_analise_nc_enum', native_enum=False),
+        nullable=False,
+        default=StatusAnaliseNcEnum.aberta,
+        server_default=StatusAnaliseNcEnum.aberta.value,
+    )
+    responsavel_id: Mapped[int | None] = mapped_column(
+        ForeignKey('usuarios.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    created_by: Mapped[int] = mapped_column(ForeignKey('usuarios.id', ondelete='RESTRICT'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    programa = relationship('ProgramaCertificacao', back_populates='analises_nc')
+    auditoria = relationship('AuditoriaAno', back_populates='analises_nc')
+    avaliacao = relationship('AvaliacaoIndicador', back_populates='analises_nc')
+    demanda = relationship('Demanda', back_populates='analises_nc')
+    criador = relationship('User', foreign_keys=[created_by], back_populates='analises_nc_criadas')
+    responsavel = relationship('User', foreign_keys=[responsavel_id], back_populates='analises_nc_responsavel')
+
+
 class Demanda(Base):
     __tablename__ = 'demandas'
 
@@ -403,6 +477,7 @@ class Demanda(Base):
     programa = relationship('ProgramaCertificacao', back_populates='demandas')
     avaliacao = relationship('AvaliacaoIndicador', back_populates='demandas')
     responsavel = relationship('User', back_populates='demandas_responsavel')
+    analises_nc = relationship('AnaliseNaoConformidade', back_populates='demanda')
 
 
 class ConfiguracaoSistema(Base):

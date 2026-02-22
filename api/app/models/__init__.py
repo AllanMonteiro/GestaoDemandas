@@ -2,6 +2,7 @@
 from app.models.base import Base
 from app.models.fsc import (
     AuditoriaAno,
+    AnaliseNaoConformidade,
     AvaliacaoIndicador,
     Criterio,
     Demanda,
@@ -18,6 +19,7 @@ from app.models.fsc import (
     ProgramaCertificacao,
     Principio,
     StatusAndamentoEnum,
+    StatusAnaliseNcEnum,
     StatusConformidadeEnum,
     StatusDocumentoEnum,
     StatusMonitoramentoCriterioEnum,
@@ -34,6 +36,7 @@ __all__ = [
     'Criterio',
     'Indicador',
     'AuditoriaAno',
+    'AnaliseNaoConformidade',
     'AvaliacaoIndicador',
     'StatusConformidadeEnum',
     'Demanda',
@@ -42,6 +45,7 @@ __all__ = [
     'NotificacaoMonitoramento',
     'ResolucaoNotificacao',
     'StatusAndamentoEnum',
+    'StatusAnaliseNcEnum',
     'PrioridadeEnum',
     'ConfiguracaoSistema',
     'EvidenceType',
