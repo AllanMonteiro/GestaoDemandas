@@ -59,26 +59,77 @@ a {
 
 .sidebar-menu {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .sidebar-link {
-  display: block;
-  padding: 10px 12px;
-  border-radius: 10px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
   color: #eaf6ff;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 600;
+  transition:
+    transform 0.14s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sidebar-link::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16);
+  flex: 0 0 auto;
+}
+
+.sidebar-link::after {
+  content: '>';
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 700;
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.16);
+  transform: translateX(2px);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 8px 20px rgba(9, 38, 59, 0.22);
+}
+
+.sidebar-link:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.28),
+    0 8px 20px rgba(9, 38, 59, 0.2);
 }
 
 .sidebar-link.active {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.45);
-  color: #ffffff;
+  background: #ffffff;
+  border-color: rgba(255, 255, 255, 0.95);
+  color: #0d4f80;
   font-weight: 600;
+  box-shadow:
+    0 6px 16px rgba(6, 38, 61, 0.22),
+    inset 0 0 0 1px rgba(13, 79, 128, 0.08);
+}
+
+.sidebar-link.active::before {
+  background: #10a757;
+  box-shadow: 0 0 0 3px rgba(16, 167, 87, 0.18);
+}
+
+.sidebar-link.active::after {
+  color: #0f70b7;
 }
 
 .main-shell {
@@ -1012,7 +1063,12 @@ button:disabled {
   }
 
   .sidebar-link {
-    padding: 9px 10px;
+    padding: 10px 12px;
+  }
+
+  .sidebar-link:hover {
+    transform: none;
+    box-shadow: none;
   }
 
   .brand-logo {
