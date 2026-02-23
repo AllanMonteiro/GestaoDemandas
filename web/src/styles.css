@@ -184,14 +184,15 @@ a {
 
 .topbar-actions {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  gap: 10px;
+  align-items: flex-end;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 .topbar-actions .form-row.compact {
   width: min(240px, 100%);
+  min-width: 180px;
 }
 
 .topbar-actions .form-row.compact span {
@@ -203,23 +204,30 @@ a {
   display: flex;
   gap: 8px;
   align-items: center;
+  align-self: flex-end;
   background: #f5faff;
   border: 1px solid #cce0f1;
   border-radius: 999px;
   padding: 4px 4px 4px 10px;
+  margin-bottom: 1px;
+  min-width: 0;
 }
 
 .user-block span {
   color: #315678;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
+  max-width: min(38vw, 360px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .page-container {
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 20px 24px;
+  padding: clamp(12px, 1.7vw, 20px) clamp(12px, 2.1vw, 24px);
   display: grid;
   gap: 14px;
 }
@@ -234,7 +242,7 @@ a {
   background: var(--surface);
   border: 1px solid #d5e4f1;
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: clamp(12px, 1.2vw, 16px);
   box-shadow: var(--shadow-soft);
 }
 
@@ -247,16 +255,16 @@ h4 {
 }
 
 h2 {
-  font-size: clamp(24px, 2.5vw, 40px);
+  font-size: clamp(20px, 2vw, 30px);
   letter-spacing: -0.02em;
 }
 
 h3 {
-  font-size: clamp(20px, 1.8vw, 30px);
+  font-size: clamp(18px, 1.4vw, 24px);
 }
 
 h4 {
-  font-size: clamp(16px, 1.4vw, 22px);
+  font-size: clamp(15px, 1.1vw, 20px);
 }
 
 .login-card {
@@ -1740,6 +1748,7 @@ button:disabled {
 
   .topbar-actions {
     justify-content: flex-start;
+    align-items: flex-end;
   }
 
   .filters-row .form-row.compact {
@@ -1907,6 +1916,14 @@ button:disabled {
     flex-wrap: wrap;
     border-radius: 12px;
     padding: 8px;
+    align-self: stretch;
+    margin-bottom: 0;
+  }
+
+  .user-block span {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
   }
 
   .between {
