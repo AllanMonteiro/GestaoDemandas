@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,15 +12,38 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models.user import RoleEnum, User
-from app.schemas.auth import AlterarSenhaRequest, LoginRequest, MensagemAuthOut, TokenResponse
+from app.schemas.auth import AlterarSenhaRequest, MensagemAuthOut, TokenResponse
 from app.schemas.user import UserCreate, UserOut
 
 router = APIRouter(prefix='/api/auth', tags=['Autenticação'])
 
 
 @router.post('/login', response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    user = authenticate_user(db, payload.email, payload.senha)
+async def login(request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    content_type = request.headers.get('content-type', '').lower()
+    email = ''
+    senha = ''
+
+    if 'application/x-www-form-urlencoded' in content_type or 'multipart/form-data' in content_type:
+        form = await request.form()
+        email = str(form.get('username') or form.get('email') or '').strip()
+        senha = str(form.get('password') or form.get('senha') or '')
+    else:
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        if isinstance(payload, dict):
+            email = str(payload.get('email') or payload.get('username') or '').strip()
+            senha = str(payload.get('senha') or payload.get('password') or '')
+
+    if not email or not senha:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail='Informe credenciais em JSON (email/senha) ou formulario (username/password).',
+        )
+
+    user = authenticate_user(db, email, senha)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Email ou senha inválidos.')
 
