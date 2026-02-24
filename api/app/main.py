@@ -19,7 +19,7 @@ from app.models.fsc import (
     StatusConformidadeEnum,
 )
 from app.models.user import RoleEnum, User
-from app.routers import auth, fsc, reports
+from app.routers import auth, fsc, projects, reports
 from app.services.s3_storage import ensure_bucket_exists
 
 settings = get_settings()
@@ -235,12 +235,13 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(fsc.router)
+app.include_router(projects.router)
 app.include_router(reports.router)
 
 
 @app.get('/')
 def root() -> dict[str, str]:
-    return {'mensagem': 'API de certificações em execução. Acesse /docs para documentação.'}
+    return {'mensagem': 'API de gestao de projetos em execucao. Acesse /docs para documentacao.'}
 
 
 @app.get('/api/health')

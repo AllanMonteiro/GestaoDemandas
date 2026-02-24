@@ -1,30 +1,13 @@
-﻿import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 
-import { Auditoria } from './api';
-import Avaliacoes from './pages/Avaliacoes';
-import Auditorias from './pages/Auditorias';
-import Cadastros from './pages/Cadastros';
-import Calendario from './pages/Calendario';
 import Configuracoes from './pages/Configuracoes';
-import Cronograma from './pages/Cronograma';
-import Dashboard from './pages/Dashboard';
-import Demandas from './pages/Demandas';
-import DetalheAvaliacao from './pages/DetalheAvaliacao';
-import Documentos from './pages/Documentos';
-import Direcionadores from './pages/Direcionadores';
 import Login from './pages/Login';
-import AnalisesNc from './pages/AnalisesNc';
-import Monitoramentos from './pages/Monitoramentos';
+import Projetos from './pages/Projetos';
+import ProjetosDashboard from './pages/ProjetosDashboard';
 
 type Props = {
   token: string | null;
   onLogin: (token: string) => Promise<void>;
-  auditorias: Auditoria[];
-  programaId: number | null;
-  auditoriaId: number | null;
-  setAuditoriaId: (id: number | null) => void;
-  selecionarContextoRelatorio: (programaId: number, year: number) => Promise<void>;
-  refreshAuditorias: () => Promise<void>;
   refreshConfiguracaoNoHeader: () => Promise<void>;
 };
 
@@ -38,17 +21,7 @@ function ProtectedRoute({ token, children }: ProtectedProps) {
   return children;
 }
 
-export default function AppRoutes({
-  token,
-  onLogin,
-  auditorias,
-  programaId,
-  auditoriaId,
-  setAuditoriaId,
-  selecionarContextoRelatorio,
-  refreshAuditorias,
-  refreshConfiguracaoNoHeader,
-}: Props) {
+export default function AppRoutes({ token, onLogin, refreshConfiguracaoNoHeader }: Props) {
   return (
     <Routes>
       <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login onLogin={onLogin} />} />
@@ -57,120 +30,16 @@ export default function AppRoutes({
         path="/"
         element={
           <ProtectedRoute token={token}>
-            <Dashboard
-              programaId={programaId}
-              auditoriaId={auditoriaId}
-              selecionarContextoRelatorio={selecionarContextoRelatorio}
-            />
+            <ProjetosDashboard />
           </ProtectedRoute>
         }
       />
 
       <Route
-        path="/auditorias"
+        path="/projetos"
         element={
           <ProtectedRoute token={token}>
-            <Auditorias
-              auditorias={auditorias}
-              programaId={programaId}
-              auditoriaId={auditoriaId}
-              setAuditoriaId={setAuditoriaId}
-              refreshAuditorias={refreshAuditorias}
-            />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/cadastros"
-        element={
-          <ProtectedRoute token={token}>
-            <Cadastros
-              programaId={programaId}
-              auditoriaId={auditoriaId}
-              selecionarContextoRelatorio={selecionarContextoRelatorio}
-            />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/avaliacoes"
-        element={
-          <ProtectedRoute token={token}>
-            <Avaliacoes programaId={programaId} auditoriaId={auditoriaId} />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/avaliacoes/:id"
-        element={
-          <ProtectedRoute token={token}>
-            <DetalheAvaliacao />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/demandas"
-        element={
-          <ProtectedRoute token={token}>
-            <Demandas programaId={programaId} auditoriaId={auditoriaId} />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/monitoramentos"
-        element={
-          <ProtectedRoute token={token}>
-            <Monitoramentos programaId={programaId} auditoriaId={auditoriaId} />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/analises-nc"
-        element={
-          <ProtectedRoute token={token}>
-            <AnalisesNc programaId={programaId} auditoriaId={auditoriaId} />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/documentos"
-        element={
-          <ProtectedRoute token={token}>
-            <Documentos programaId={programaId} auditoriaId={auditoriaId} />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/cronograma"
-        element={
-          <ProtectedRoute token={token}>
-            <Cronograma programaId={programaId} auditoriaId={auditoriaId} />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/calendario"
-        element={
-          <ProtectedRoute token={token}>
-            <Calendario programaId={programaId} auditoriaId={auditoriaId} />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/direcionadores"
-        element={
-          <ProtectedRoute token={token}>
-            <Direcionadores programaId={programaId} auditoriaId={auditoriaId} />
+            <Projetos />
           </ProtectedRoute>
         }
       />

@@ -67,4 +67,24 @@ class User(Base):
         back_populates='responsavel',
     )
     demandas_responsavel = relationship('Demanda', back_populates='responsavel')
+    projetos_criados = relationship(
+        'Projeto',
+        foreign_keys='Projeto.created_by',
+        back_populates='criador',
+    )
+    projetos_gerenciados = relationship(
+        'Projeto',
+        foreign_keys='Projeto.gerente_id',
+        back_populates='gerente',
+    )
+    tarefas_criadas = relationship(
+        'TarefaProjeto',
+        foreign_keys='TarefaProjeto.created_by',
+        back_populates='criador',
+    )
+    tarefas_responsavel = relationship(
+        'TarefaProjeto',
+        foreign_keys='TarefaProjeto.responsavel_id',
+        back_populates='responsavel',
+    )
     logs = relationship('AuditLog', back_populates='autor')

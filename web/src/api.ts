@@ -378,3 +378,86 @@ export interface MonitoramentoMensalItem {
   avaliacoes_registradas: number;
   evidencias_registradas: number;
 }
+
+export type ProjetoStatus = 'planejamento' | 'em_andamento' | 'pausado' | 'concluido' | 'cancelado';
+
+export const PROJETO_STATUS_LABELS: Record<ProjetoStatus, string> = {
+  planejamento: 'Planejamento',
+  em_andamento: 'Em Andamento',
+  pausado: 'Pausado',
+  concluido: 'Concluido',
+  cancelado: 'Cancelado',
+};
+
+export type TarefaProjetoStatus =
+  | 'backlog'
+  | 'a_fazer'
+  | 'em_andamento'
+  | 'em_revisao'
+  | 'concluida'
+  | 'bloqueada';
+
+export const TAREFA_PROJETO_STATUS_LABELS: Record<TarefaProjetoStatus, string> = {
+  backlog: 'Backlog',
+  a_fazer: 'A Fazer',
+  em_andamento: 'Em Andamento',
+  em_revisao: 'Em Revisao',
+  concluida: 'Concluida',
+  bloqueada: 'Bloqueada',
+};
+
+export interface Projeto {
+  id: number;
+  codigo: string;
+  nome: string;
+  descricao?: string | null;
+  status: ProjetoStatus;
+  prioridade: Prioridade;
+  progresso: number;
+  data_inicio?: string | null;
+  data_fim_prevista?: string | null;
+  data_fim_real?: string | null;
+  gerente_id?: number | null;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TarefaProjeto {
+  id: number;
+  projeto_id: number;
+  titulo: string;
+  descricao?: string | null;
+  status: TarefaProjetoStatus;
+  prioridade: Prioridade;
+  responsavel_id?: number | null;
+  start_date?: string | null;
+  due_date?: string | null;
+  completed_at?: string | null;
+  estimativa_horas?: number | null;
+  horas_registradas: number;
+  ordem: number;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResumoProjetosStatusItem {
+  status: ProjetoStatus;
+  label: string;
+  quantidade: number;
+}
+
+export interface ResumoTarefasStatusItem {
+  status: TarefaProjetoStatus;
+  label: string;
+  quantidade: number;
+}
+
+export interface ProjetosDashboardResumo {
+  total_projetos: number;
+  projetos_atrasados: number;
+  tarefas_atrasadas: number;
+  projetos_por_status: ResumoProjetosStatusItem[];
+  tarefas_por_status: ResumoTarefasStatusItem[];
+}

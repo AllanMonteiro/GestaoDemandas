@@ -1,3 +1,3 @@
-﻿from app.routers import auth, fsc, reports
+from app.routers import auth, fsc, projects, reports
 
-__all__ = ['auth', 'fsc', 'reports']
+__all__ = ['auth', 'fsc', 'projects', 'reports']
