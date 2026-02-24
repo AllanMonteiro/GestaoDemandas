@@ -63,17 +63,17 @@ export default function App() {
                   {configuracao?.logo_preview_url && (
                     <img src={configuracao.logo_preview_url} alt="Logo da empresa" className="brand-logo" />
                   )}
-                  <strong>{configuracao?.nome_empresa || 'Sistema de Projetos'}</strong>
+                  <strong>{configuracao?.nome_empresa || 'Sistema de Demandas'}</strong>
                 </div>
-                <small>Planejamento, execucao e acompanhamento</small>
+                <small>Planejamento, execucao e acompanhamento de demandas</small>
               </div>
 
               <nav className="sidebar-menu">
                 <NavLink to="/" end className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Dashboard
                 </NavLink>
-                <NavLink to="/projetos" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
-                  Projetos
+                <NavLink to="/demandas" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+                  Demandas
                 </NavLink>
                 <NavLink to="/configuracoes" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Configuracoes

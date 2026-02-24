@@ -36,13 +36,15 @@ export default function AppRoutes({ token, onLogin, refreshConfiguracaoNoHeader 
       />
 
       <Route
-        path="/projetos"
+        path="/demandas"
         element={
           <ProtectedRoute token={token}>
             <Projetos />
           </ProtectedRoute>
         }
       />
+
+      <Route path="/projetos" element={<Navigate to="/demandas" replace />} />
 
       <Route
         path="/configuracoes"

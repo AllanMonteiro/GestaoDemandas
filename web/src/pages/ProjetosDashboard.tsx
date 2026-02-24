@@ -34,7 +34,7 @@ export default function ProjetosDashboard() {
       setResumo(resumoResp.data);
       setProjetosAtrasados(projetosResp.data);
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao carregar dashboard de projetos.');
+      setErro(err?.response?.data?.detail || 'Falha ao carregar dashboard de demandas.');
     }
   };
 
@@ -52,7 +52,7 @@ export default function ProjetosDashboard() {
   return (
     <div className="grid gap-16">
       <div className="between">
-        <h2>Dashboard de Projetos</h2>
+        <h2>Dashboard de Demandas</h2>
         <button type="button" className="btn-secondary" onClick={() => void carregar()}>
           Atualizar
         </button>
@@ -66,24 +66,24 @@ export default function ProjetosDashboard() {
         <>
           <div className="cards-status">
             <div className="card status-card status-risco-atencao">
-              <h3>Total de Projetos</h3>
+              <h3>Total de Demandas</h3>
               <strong>{resumo.total_projetos}</strong>
             </div>
             <div className="card status-card status-risco-alto">
-              <h3>Projetos Atrasados</h3>
+              <h3>Demandas Atrasadas</h3>
               <strong>{resumo.projetos_atrasados}</strong>
             </div>
             <div className="card status-card status-risco-medio">
-              <h3>Tarefas Atrasadas</h3>
+              <h3>Subdemandas Atrasadas</h3>
               <strong>{resumo.tarefas_atrasadas}</strong>
             </div>
           </div>
 
           <div className="card">
-            <h3>Status dos Projetos</h3>
+            <h3>Status das Demandas</h3>
             <Table
               rows={resumo.projetos_por_status}
-              emptyText="Sem dados de projeto."
+              emptyText="Sem dados de demanda."
               columns={[
                 { title: 'Status', render: (item) => PROJETO_STATUS_LABELS[item.status] },
                 { title: 'Quantidade', render: (item) => item.quantidade },
@@ -92,13 +92,13 @@ export default function ProjetosDashboard() {
           </div>
 
           <div className="card">
-            <h3>Pipeline de Tarefas</h3>
+            <h3>Pipeline de Subdemandas</h3>
             <Table
               rows={ORDEM_TAREFAS.map((status) => ({
                 status,
                 quantidade: tarefasMap.get(status) || 0,
               }))}
-              emptyText="Sem tarefas."
+              emptyText="Sem subdemandas."
               columns={[
                 { title: 'Status', render: (item) => TAREFA_PROJETO_STATUS_LABELS[item.status] },
                 { title: 'Quantidade', render: (item) => item.quantidade },
@@ -109,10 +109,10 @@ export default function ProjetosDashboard() {
       )}
 
       <div className="card">
-        <h3>Projetos no Prazo Critico</h3>
+        <h3>Demandas em Prazo Critico</h3>
         <Table
           rows={projetosAtrasados}
-          emptyText="Nenhum projeto atrasado."
+          emptyText="Nenhuma demanda atrasada."
           columns={[
             { title: 'Codigo', render: (projeto) => projeto.codigo },
             { title: 'Nome', render: (projeto) => projeto.nome },

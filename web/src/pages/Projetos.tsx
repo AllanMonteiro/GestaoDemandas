@@ -94,7 +94,7 @@ export default function Projetos() {
       });
       setProjetos(data);
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao carregar projetos.');
+      setErro(err?.response?.data?.detail || 'Falha ao carregar demandas.');
     }
   };
 
@@ -108,7 +108,7 @@ export default function Projetos() {
       });
       setTarefas(data);
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao carregar tarefas.');
+      setErro(err?.response?.data?.detail || 'Falha ao carregar subdemandas.');
     }
   };
 
@@ -169,10 +169,10 @@ export default function Projetos() {
         gerente_id: '',
         progresso: 0,
       });
-      setMensagem('Projeto criado com sucesso.');
+      setMensagem('Demanda criada com sucesso.');
       await carregarProjetos();
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao criar projeto.');
+      setErro(err?.response?.data?.detail || 'Falha ao criar demanda.');
     }
   };
 
@@ -202,10 +202,10 @@ export default function Projetos() {
         due_date: '',
         estimativa_horas: '',
       });
-      setMensagem('Tarefa criada com sucesso.');
+      setMensagem('Subdemanda criada com sucesso.');
       await carregarTarefas(projetoSelecionadoId);
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao criar tarefa.');
+      setErro(err?.response?.data?.detail || 'Falha ao criar subdemanda.');
     }
   };
 
@@ -215,10 +215,10 @@ export default function Projetos() {
     setMensagem('');
     try {
       await api.patch(`/projetos/${projetoId}/status`, { status: statusProjeto });
-      setMensagem('Status do projeto atualizado.');
+      setMensagem('Status da demanda atualizado.');
       await carregarProjetos();
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao atualizar status do projeto.');
+      setErro(err?.response?.data?.detail || 'Falha ao atualizar status da demanda.');
     }
   };
 
@@ -228,12 +228,12 @@ export default function Projetos() {
     setMensagem('');
     try {
       await api.patch(`/tarefas/${tarefaId}/status`, { status: statusTarefa });
-      setMensagem('Status da tarefa atualizado.');
+      setMensagem('Status da subdemanda atualizado.');
       if (projetoSelecionadoId) {
         await carregarTarefas(projetoSelecionadoId);
       }
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao atualizar tarefa.');
+      setErro(err?.response?.data?.detail || 'Falha ao atualizar subdemanda.');
     }
   };
 
@@ -243,10 +243,10 @@ export default function Projetos() {
     setMensagem('');
     try {
       await api.delete(`/projetos/${projetoId}`);
-      setMensagem('Projeto removido.');
+      setMensagem('Demanda removida.');
       await carregarProjetos();
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao remover projeto.');
+      setErro(err?.response?.data?.detail || 'Falha ao remover demanda.');
     }
   };
 
@@ -256,21 +256,21 @@ export default function Projetos() {
     setMensagem('');
     try {
       await api.delete(`/tarefas/${tarefaId}`);
-      setMensagem('Tarefa removida.');
+      setMensagem('Subdemanda removida.');
       await carregarTarefas(projetoSelecionadoId);
     } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao remover tarefa.');
+      setErro(err?.response?.data?.detail || 'Falha ao remover subdemanda.');
     }
   };
 
   return (
     <div className="grid gap-16">
-      <h2>Gestao de Projetos</h2>
+      <h2>Gestao de Demandas</h2>
 
       <div className="card">
         <div className="filters-row">
           <label className="form-row compact">
-            <span>Status do Projeto</span>
+            <span>Status da Demanda</span>
             <select value={filtroStatusProjeto} onChange={(e) => setFiltroStatusProjeto(e.target.value)}>
               <option value="">Todos</option>
               {STATUS_PROJETO_LIST.map((status) => (
@@ -296,7 +296,7 @@ export default function Projetos() {
 
         <Table
           rows={projetos}
-          emptyText="Nenhum projeto encontrado."
+          emptyText="Nenhuma demanda encontrada."
           columns={[
             {
               title: 'Abrir',
@@ -329,7 +329,7 @@ export default function Projetos() {
             { title: 'Prioridade', render: (projeto) => PRIORIDADE_LABELS[projeto.prioridade] },
             { title: 'Progresso', render: (projeto) => `${projeto.progresso}%` },
             {
-              title: 'Gerente',
+              title: 'Responsavel',
               render: (projeto) =>
                 projeto.gerente_id ? usuariosMap.get(projeto.gerente_id) || projeto.gerente_id : '-',
             },
@@ -351,7 +351,7 @@ export default function Projetos() {
 
       {podeGerenciarProjetos && (
         <div className="card">
-          <h3>Novo Projeto</h3>
+          <h3>Nova Demanda</h3>
           <form className="grid gap-12" onSubmit={criarProjeto}>
             <div className="grid three-col gap-12">
               <label className="form-row">
@@ -371,7 +371,7 @@ export default function Projetos() {
                 />
               </label>
               <label className="form-row">
-                <span>Gerente</span>
+                <span>Responsavel</span>
                 <select
                   value={novoProjeto.gerente_id}
                   onChange={(e) => setNovoProjeto((prev) => ({ ...prev, gerente_id: e.target.value }))}
@@ -440,14 +440,14 @@ export default function Projetos() {
               </label>
             </div>
 
-            <button type="submit">Criar Projeto</button>
+            <button type="submit">Criar Demanda</button>
           </form>
         </div>
       )}
 
       <div className="card">
         <div className="between">
-          <h3>Tarefas do Projeto</h3>
+          <h3>Subdemandas da Demanda</h3>
           <label className="form-row compact">
             <span>Status</span>
             <select value={filtroStatusTarefa} onChange={(e) => setFiltroStatusTarefa(e.target.value)}>
@@ -461,12 +461,12 @@ export default function Projetos() {
           </label>
         </div>
 
-        {!projetoSelecionadoId && <div className="muted-text">Selecione um projeto para visualizar as tarefas.</div>}
+        {!projetoSelecionadoId && <div className="muted-text">Selecione uma demanda para visualizar as subdemandas.</div>}
 
         {projetoSelecionadoId && (
           <Table
             rows={tarefas}
-            emptyText="Sem tarefas para os filtros atuais."
+            emptyText="Sem subdemandas para os filtros atuais."
             columns={[
               { title: 'Titulo', render: (tarefa) => tarefa.titulo },
               {
@@ -514,7 +514,7 @@ export default function Projetos() {
 
       {projetoSelecionadoId && podeCriarTarefas && (
         <div className="card">
-          <h3>Nova Tarefa</h3>
+          <h3>Nova Subdemanda</h3>
           <form className="grid gap-12" onSubmit={criarTarefa}>
             <div className="grid three-col gap-12">
               <label className="form-row">
@@ -606,7 +606,7 @@ export default function Projetos() {
               </label>
             </div>
 
-            <button type="submit">Criar Tarefa</button>
+            <button type="submit">Criar Subdemanda</button>
           </form>
         </div>
       )}
