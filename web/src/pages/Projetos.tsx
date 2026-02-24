@@ -61,6 +61,10 @@ export default function Projetos() {
   });
 
   const usuariosMap = useMemo(() => new Map(usuarios.map((u) => [u.id, u.nome])), [usuarios]);
+  const demandaSelecionada = useMemo(
+    () => projetos.find((projeto) => projeto.id === projetoSelecionadoId) || null,
+    [projetos, projetoSelecionadoId]
+  );
 
   const podeGerenciarProjetos = usuarioAtual?.role === 'ADMIN' || usuarioAtual?.role === 'GESTOR';
   const podeCriarTarefas = podeGerenciarProjetos || usuarioAtual?.role === 'AUDITOR';
@@ -147,7 +151,7 @@ export default function Projetos() {
     setErro('');
     setMensagem('');
     try {
-      await api.post('/projetos', {
+      const { data: demandaCriada } = await api.post<Projeto>('/projetos', {
         codigo: novoProjeto.codigo.trim(),
         nome: novoProjeto.nome.trim(),
         descricao: novoProjeto.descricao || undefined,
@@ -169,8 +173,11 @@ export default function Projetos() {
         gerente_id: '',
         progresso: 0,
       });
-      setMensagem('Demanda criada com sucesso.');
+      setProjetoSelecionadoId(demandaCriada.id);
+      setFiltroStatusTarefa('');
+      setMensagem(`Demanda criada com sucesso. Demanda ativa: ${demandaCriada.codigo} - ${demandaCriada.nome}.`);
       await carregarProjetos();
+      await carregarTarefas(demandaCriada.id);
     } catch (err: any) {
       setErro(err?.response?.data?.detail || 'Falha ao criar demanda.');
     }
@@ -178,7 +185,11 @@ export default function Projetos() {
 
   const criarTarefa = async (e: FormEvent) => {
     e.preventDefault();
-    if (!projetoSelecionadoId || !podeCriarTarefas) return;
+    if (!podeCriarTarefas) return;
+    if (!projetoSelecionadoId) {
+      setErro('Selecione uma demanda antes de criar subdemanda.');
+      return;
+    }
     setErro('');
     setMensagem('');
     try {
@@ -202,7 +213,10 @@ export default function Projetos() {
         due_date: '',
         estimativa_horas: '',
       });
-      setMensagem('Subdemanda criada com sucesso.');
+      const rotuloDemanda = demandaSelecionada
+        ? `${demandaSelecionada.codigo} - ${demandaSelecionada.nome}`
+        : `ID ${projetoSelecionadoId}`;
+      setMensagem(`Subdemanda criada e vinculada a demanda ${rotuloDemanda}.`);
       await carregarTarefas(projetoSelecionadoId);
     } catch (err: any) {
       setErro(err?.response?.data?.detail || 'Falha ao criar subdemanda.');
@@ -461,6 +475,11 @@ export default function Projetos() {
           </label>
         </div>
 
+        <div className="muted-text" style={{ marginTop: 8 }}>
+          Demanda ativa:{' '}
+          <strong>{demandaSelecionada ? `${demandaSelecionada.codigo} - ${demandaSelecionada.nome}` : 'nenhuma'}</strong>
+        </div>
+
         {!projetoSelecionadoId && <div className="muted-text">Selecione uma demanda para visualizar as subdemandas.</div>}
 
         {projetoSelecionadoId && (
@@ -515,6 +534,9 @@ export default function Projetos() {
       {projetoSelecionadoId && podeCriarTarefas && (
         <div className="card">
           <h3>Nova Subdemanda</h3>
+          <p className="muted-text">
+            Vinculo atual: <strong>{demandaSelecionada ? `${demandaSelecionada.codigo} - ${demandaSelecionada.nome}` : '-'}</strong>
+          </p>
           <form className="grid gap-12" onSubmit={criarTarefa}>
             <div className="grid three-col gap-12">
               <label className="form-row">
