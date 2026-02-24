@@ -30,6 +30,7 @@ export default function Projetos() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<number | null>(null);
+  const [demandaVinculoId, setDemandaVinculoId] = useState<number | null>(null);
   const [tarefas, setTarefas] = useState<TarefaProjeto[]>([]);
   const [filtroStatusProjeto, setFiltroStatusProjeto] = useState('');
   const [somenteAtrasados, setSomenteAtrasados] = useState(false);
@@ -128,6 +129,7 @@ export default function Projetos() {
   useEffect(() => {
     if (!projetos.length) {
       setProjetoSelecionadoId(null);
+      setDemandaVinculoId(null);
       setTarefas([]);
       return;
     }
@@ -135,6 +137,10 @@ export default function Projetos() {
       setProjetoSelecionadoId(projetos[0].id);
     }
   }, [projetos, projetoSelecionadoId]);
+
+  useEffect(() => {
+    setDemandaVinculoId(projetoSelecionadoId);
+  }, [projetoSelecionadoId]);
 
   useEffect(() => {
     if (!projetoSelecionadoId) {
@@ -186,14 +192,15 @@ export default function Projetos() {
   const criarTarefa = async (e: FormEvent) => {
     e.preventDefault();
     if (!podeCriarTarefas) return;
-    if (!projetoSelecionadoId) {
+    const demandaAlvoId = demandaVinculoId || projetoSelecionadoId;
+    if (!demandaAlvoId) {
       setErro('Selecione uma demanda antes de criar subdemanda.');
       return;
     }
     setErro('');
     setMensagem('');
     try {
-      await api.post(`/projetos/${projetoSelecionadoId}/tarefas`, {
+      await api.post(`/projetos/${demandaAlvoId}/tarefas`, {
         titulo: novaTarefa.titulo.trim(),
         descricao: novaTarefa.descricao || undefined,
         prioridade: novaTarefa.prioridade,
@@ -213,11 +220,12 @@ export default function Projetos() {
         due_date: '',
         estimativa_horas: '',
       });
-      const rotuloDemanda = demandaSelecionada
-        ? `${demandaSelecionada.codigo} - ${demandaSelecionada.nome}`
-        : `ID ${projetoSelecionadoId}`;
+      const demandaAlvo = projetos.find((projeto) => projeto.id === demandaAlvoId) || null;
+      const rotuloDemanda = demandaAlvo ? `${demandaAlvo.codigo} - ${demandaAlvo.nome}` : `ID ${demandaAlvoId}`;
       setMensagem(`Subdemanda criada e vinculada a demanda ${rotuloDemanda}.`);
-      await carregarTarefas(projetoSelecionadoId);
+      setProjetoSelecionadoId(demandaAlvoId);
+      setDemandaVinculoId(demandaAlvoId);
+      await carregarTarefas(demandaAlvoId);
     } catch (err: any) {
       setErro(err?.response?.data?.detail || 'Falha ao criar subdemanda.');
     }
@@ -539,6 +547,21 @@ export default function Projetos() {
           </p>
           <form className="grid gap-12" onSubmit={criarTarefa}>
             <div className="grid three-col gap-12">
+              <label className="form-row">
+                <span>Vincular a Demanda</span>
+                <select
+                  value={demandaVinculoId ?? ''}
+                  onChange={(e) => setDemandaVinculoId(e.target.value ? Number(e.target.value) : null)}
+                  required
+                >
+                  <option value="">Selecione</option>
+                  {projetos.map((projeto) => (
+                    <option key={projeto.id} value={projeto.id}>
+                      {projeto.codigo} - {projeto.nome}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="form-row">
                 <span>Titulo</span>
                 <input
