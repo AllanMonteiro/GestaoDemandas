@@ -37,6 +37,7 @@ export default function Projetos() {
   const [filtroStatusTarefa, setFiltroStatusTarefa] = useState('');
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
+  const [contagemSubdemandas, setContagemSubdemandas] = useState<Record<number, number>>({});
 
   const [novoProjeto, setNovoProjeto] = useState({
     codigo: '',
@@ -98,6 +99,21 @@ export default function Projetos() {
         },
       });
       setProjetos(data);
+      if (!data.length) {
+        setContagemSubdemandas({});
+        return;
+      }
+      const contagens = await Promise.all(
+        data.map(async (demanda) => {
+          try {
+            const resp = await api.get<TarefaProjeto[]>(`/projetos/${demanda.id}/tarefas`);
+            return [demanda.id, resp.data.length] as const;
+          } catch {
+            return [demanda.id, 0] as const;
+          }
+        })
+      );
+      setContagemSubdemandas(Object.fromEntries(contagens));
     } catch (err: any) {
       setErro(err?.response?.data?.detail || 'Falha ao carregar demandas.');
     }
@@ -225,6 +241,7 @@ export default function Projetos() {
       setMensagem(`Subdemanda criada e vinculada a demanda ${rotuloDemanda}.`);
       setProjetoSelecionadoId(demandaAlvoId);
       setDemandaVinculoId(demandaAlvoId);
+      await carregarProjetos();
       await carregarTarefas(demandaAlvoId);
     } catch (err: any) {
       setErro(err?.response?.data?.detail || 'Falha ao criar subdemanda.');
@@ -279,6 +296,7 @@ export default function Projetos() {
     try {
       await api.delete(`/tarefas/${tarefaId}`);
       setMensagem('Subdemanda removida.');
+      await carregarProjetos();
       await carregarTarefas(projetoSelecionadoId);
     } catch (err: any) {
       setErro(err?.response?.data?.detail || 'Falha ao remover subdemanda.');
@@ -350,6 +368,7 @@ export default function Projetos() {
             },
             { title: 'Prioridade', render: (projeto) => PRIORIDADE_LABELS[projeto.prioridade] },
             { title: 'Progresso', render: (projeto) => `${projeto.progresso}%` },
+            { title: 'Subdemandas', render: (projeto) => contagemSubdemandas[projeto.id] ?? 0 },
             {
               title: 'Responsavel',
               render: (projeto) =>
