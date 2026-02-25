@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import Configuracoes from './pages/Configuracoes';
+import Direcionadores from './pages/Direcionadores';
 import Login from './pages/Login';
 import Projetos from './pages/Projetos';
 import ProjetosDashboard from './pages/ProjetosDashboard';
@@ -40,6 +41,15 @@ export default function AppRoutes({ token, onLogin, refreshConfiguracaoNoHeader 
         element={
           <ProtectedRoute token={token}>
             <Projetos />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/direcionadores"
+        element={
+          <ProtectedRoute token={token}>
+            <Direcionadores />
           </ProtectedRoute>
         }
       />

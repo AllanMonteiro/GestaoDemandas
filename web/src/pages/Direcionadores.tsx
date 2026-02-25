@@ -3,19 +3,21 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   api,
+  Auditoria,
   Avaliacao,
   Criterio,
   Demanda,
   Indicador,
   Principio,
+  ProgramaCertificacao,
   STATUS_ANDAMENTO_LABELS,
   STATUS_CONFORMIDADE_LABELS,
   StatusConformidade,
 } from '../api';
 
 type Props = {
-  programaId: number | null;
-  auditoriaId: number | null;
+  programaId?: number | null;
+  auditoriaId?: number | null;
 };
 
 type CriterioDirecionador = {
@@ -66,6 +68,10 @@ function statusEhNaoConformidade(status: StatusConformidade): boolean {
 
 export default function Direcionadores({ programaId, auditoriaId }: Props) {
   const navigate = useNavigate();
+  const [programas, setProgramas] = useState<ProgramaCertificacao[]>([]);
+  const [auditorias, setAuditorias] = useState<Auditoria[]>([]);
+  const [programaIdInterno, setProgramaIdInterno] = useState<number | null>(null);
+  const [auditoriaIdInterno, setAuditoriaIdInterno] = useState<number | null>(null);
   const [avaliacoesNc, setAvaliacoesNc] = useState<Avaliacao[]>([]);
   const [indicadores, setIndicadores] = useState<Indicador[]>([]);
   const [criterios, setCriterios] = useState<Criterio[]>([]);
@@ -76,17 +82,60 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
   const [subunidadeAtivaId, setSubunidadeAtivaId] = useState<number | 'todas'>('todas');
   const [erro, setErro] = useState('');
 
+  const contextoTravado = Boolean(programaId && auditoriaId);
+  const programaIdEfetivo = contextoTravado ? (programaId as number) : programaIdInterno;
+  const auditoriaIdEfetivo = contextoTravado ? (auditoriaId as number) : auditoriaIdInterno;
+
   useEffect(() => {
-    if (!programaId || !auditoriaId) return;
+    if (contextoTravado) return;
+    const carregarProgramas = async () => {
+      try {
+        const { data } = await api.get<ProgramaCertificacao[]>('/programas');
+        setProgramas(data);
+        setProgramaIdInterno((atual) => {
+          if (atual && data.some((item) => item.id === atual)) return atual;
+          return data[0]?.id || null;
+        });
+      } catch (err: any) {
+        setErro(err?.response?.data?.detail || 'Falha ao carregar programas.');
+      }
+    };
+    void carregarProgramas();
+  }, [contextoTravado]);
+
+  useEffect(() => {
+    if (contextoTravado) return;
+    if (!programaIdInterno) {
+      setAuditorias([]);
+      setAuditoriaIdInterno(null);
+      return;
+    }
+    const carregarAuditorias = async () => {
+      try {
+        const { data } = await api.get<Auditoria[]>('/auditorias', { params: { programa_id: programaIdInterno } });
+        setAuditorias(data);
+        setAuditoriaIdInterno((atual) => {
+          if (atual && data.some((item) => item.id === atual)) return atual;
+          return data[0]?.id || null;
+        });
+      } catch (err: any) {
+        setErro(err?.response?.data?.detail || 'Falha ao carregar auditorias.');
+      }
+    };
+    void carregarAuditorias();
+  }, [contextoTravado, programaIdInterno]);
+
+  useEffect(() => {
+    if (!programaIdEfetivo || !auditoriaIdEfetivo) return;
     const carregar = async () => {
       setErro('');
       try {
         const [avaliacoesResp, indicadoresResp, criteriosResp, principiosResp, demandasResp] = await Promise.all([
-          api.get<Avaliacao[]>('/avaliacoes', { params: { programa_id: programaId, auditoria_id: auditoriaId } }),
-          api.get<Indicador[]>('/indicadores', { params: { programa_id: programaId } }),
-          api.get<Criterio[]>('/criterios', { params: { programa_id: programaId } }),
-          api.get<Principio[]>('/principios', { params: { programa_id: programaId } }),
-          api.get<Demanda[]>('/demandas', { params: { programa_id: programaId, auditoria_id: auditoriaId } }),
+          api.get<Avaliacao[]>('/avaliacoes', { params: { programa_id: programaIdEfetivo, auditoria_id: auditoriaIdEfetivo } }),
+          api.get<Indicador[]>('/indicadores', { params: { programa_id: programaIdEfetivo } }),
+          api.get<Criterio[]>('/criterios', { params: { programa_id: programaIdEfetivo } }),
+          api.get<Principio[]>('/principios', { params: { programa_id: programaIdEfetivo } }),
+          api.get<Demanda[]>('/demandas', { params: { programa_id: programaIdEfetivo, auditoria_id: auditoriaIdEfetivo } }),
         ]);
 
         setAvaliacoesNc(
@@ -101,7 +150,7 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
       }
     };
     void carregar();
-  }, [programaId, auditoriaId]);
+  }, [programaIdEfetivo, auditoriaIdEfetivo]);
 
   const estrutura = useMemo<PrincipioDirecionador[]>(() => {
     const indicadorMap = new Map(indicadores.map((item) => [item.id, item]));
@@ -223,12 +272,49 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
     return estrutura.filter((item) => item.id === subunidadeAtivaId);
   }, [estrutura, subunidadeAtivaId]);
 
-  if (!programaId || !auditoriaId) {
+  if (!programaIdEfetivo || !auditoriaIdEfetivo) {
     return <div className="card">Selecione Programa e Auditoria (Ano) para visualizar o diagrama de direcionadores.</div>;
   }
 
   return (
     <div className="grid gap-16">
+      {!contextoTravado && (
+        <div className="card">
+          <h3>Contexto do Diagrama</h3>
+          <div className="grid two-col gap-12" style={{ marginTop: 10 }}>
+            <label className="form-row">
+              <span>Programa</span>
+              <select
+                value={programaIdInterno ?? ''}
+                onChange={(e) => setProgramaIdInterno(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Selecione</option>
+                {programas.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.codigo} - {item.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="form-row">
+              <span>Auditoria (Ano)</span>
+              <select
+                value={auditoriaIdInterno ?? ''}
+                onChange={(e) => setAuditoriaIdInterno(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Selecione</option>
+                {auditorias.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.year} {item.tipo ? `- ${item.tipo}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
+
       <div className="between">
         <h2>Diagrama de Direcionadores para Nao Conformidades</h2>
         <div className="drivers-toolbar-actions">

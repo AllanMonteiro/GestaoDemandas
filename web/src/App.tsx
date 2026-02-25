@@ -75,6 +75,9 @@ export default function App() {
                 <NavLink to="/demandas" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Demandas
                 </NavLink>
+                <NavLink to="/direcionadores" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+                  Direcionadores
+                </NavLink>
                 <NavLink to="/configuracoes" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
                   Configuracoes
                 </NavLink>
