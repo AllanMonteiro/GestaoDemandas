@@ -275,6 +275,11 @@ export default function Projetos() {
     }
   };
 
+  const alternarCheckSubdemanda = async (tarefa: TarefaProjeto, checked: boolean) => {
+    const novoStatus: TarefaProjetoStatus = checked ? 'concluida' : 'a_fazer';
+    await atualizarStatusTarefa(tarefa.id, novoStatus);
+  };
+
   const removerProjeto = async (projetoId: number) => {
     if (!podeGerenciarProjetos) return;
     setErro('');
@@ -576,6 +581,20 @@ export default function Projetos() {
             rows={tarefas}
             emptyText="Sem subdemandas para os filtros atuais."
             columns={[
+              {
+                title: 'Check',
+                render: (tarefa) => (
+                  <label className="subdemanda-check">
+                    <input
+                      type="checkbox"
+                      checked={tarefa.status === 'concluida'}
+                      onChange={(e) => void alternarCheckSubdemanda(tarefa, e.target.checked)}
+                      disabled={!podeEditarTarefa}
+                    />
+                    <span>{tarefa.status === 'concluida' ? 'Feito' : 'Pendente'}</span>
+                  </label>
+                ),
+              },
               { title: 'Titulo', render: (tarefa) => tarefa.titulo },
               {
                 title: 'Responsavel',
