@@ -77,7 +77,14 @@ export default function Direcionadores() {
 
           const subdemandas = await Promise.all(
             tarefasOrdenadas.map(async (tarefa) => {
-              const { data: atividades } = await api.get<AtividadeSubdemanda[]>(`/tarefas/${tarefa.id}/atividades`);
+              let atividades: AtividadeSubdemanda[] = [];
+              try {
+                const resp = await api.get<AtividadeSubdemanda[]>(`/tarefas/${tarefa.id}/atividades`);
+                atividades = resp.data;
+              } catch (err: any) {
+                // Compatibilidade com API antiga que ainda não expõe rotas de atividades.
+                if (err?.response?.status !== 404) throw err;
+              }
               return {
                 id: tarefa.id,
                 titulo: tarefa.titulo,
