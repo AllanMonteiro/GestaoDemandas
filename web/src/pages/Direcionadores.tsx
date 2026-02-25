@@ -3,320 +3,186 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   api,
-  Auditoria,
-  Avaliacao,
-  Criterio,
-  Demanda,
-  Indicador,
-  Principio,
-  ProgramaCertificacao,
-  STATUS_ANDAMENTO_LABELS,
-  STATUS_CONFORMIDADE_LABELS,
-  StatusConformidade,
+  ATIVIDADE_SUBDEMANDA_STATUS_LABELS,
+  AtividadeSubdemanda,
+  PRIORIDADE_LABELS,
+  Projeto,
+  PROJETO_STATUS_LABELS,
+  TarefaProjeto,
+  TAREFA_PROJETO_STATUS_LABELS,
 } from '../api';
 
-type Props = {
-  programaId?: number | null;
-  auditoriaId?: number | null;
+type SubdemandaDirecionador = {
+  id: number;
+  titulo: string;
+  descricao?: string | null;
+  status: TarefaProjeto['status'];
+  prioridade: TarefaProjeto['prioridade'];
+  due_date?: string | null;
+  atividades: AtividadeSubdemanda[];
 };
 
-type CriterioDirecionador = {
+type DemandaDirecionador = {
   id: number;
   codigo: string;
-  titulo: string;
-  avaliacaoIds: number[];
-  totalAvaliacoes: number;
-  ideias: Demanda[];
+  nome: string;
+  descricao?: string | null;
+  status: Projeto['status'];
+  prioridade: Projeto['prioridade'];
+  data_fim_prevista?: string | null;
+  subdemandas: SubdemandaDirecionador[];
 };
 
-type PrincipioDirecionador = {
-  id: number;
-  codigo: string;
-  titulo: string;
-  totalAvaliacoes: number;
-  totalIdeias: number;
-  criterios: CriterioDirecionador[];
+const CLASSE_ATIVIDADE_POR_STATUS: Record<AtividadeSubdemanda['status'], string> = {
+  pendente: 'driver-idea-melhoria',
+  concluida: 'driver-idea-neutra',
 };
 
-const STATUS_NC: StatusConformidade[] = ['nc_maior', 'nc_menor', 'oportunidade_melhoria'];
-
-const ORDEM_STATUS_NC: Record<StatusConformidade, number> = {
-  nc_maior: 0,
-  nc_menor: 1,
-  oportunidade_melhoria: 2,
-  conforme: 3,
-  nao_se_aplica: 4,
-};
-
-const CLASSE_IDEIA_POR_STATUS: Record<StatusConformidade, string> = {
-  nc_maior: 'driver-idea-critica',
-  nc_menor: 'driver-idea-media',
-  oportunidade_melhoria: 'driver-idea-melhoria',
-  conforme: 'driver-idea-neutra',
-  nao_se_aplica: 'driver-idea-neutra',
-};
-
-function ordenarCodigoOuTitulo(aCodigo?: string | null, aTitulo?: string, bCodigo?: string | null, bTitulo?: string): number {
-  const a = `${aCodigo || ''} ${aTitulo || ''}`.trim().toLowerCase();
-  const b = `${bCodigo || ''} ${bTitulo || ''}`.trim().toLowerCase();
-  return a.localeCompare(b, 'pt-BR');
+function ordenarTexto(a?: string | null, b?: string | null): number {
+  return (a || '').localeCompare(b || '', 'pt-BR');
 }
 
-function statusEhNaoConformidade(status: StatusConformidade): boolean {
-  return STATUS_NC.includes(status);
+function statusDemandaAtiva(status: Projeto['status']): boolean {
+  return status !== 'concluido' && status !== 'cancelado';
 }
 
-export default function Direcionadores({ programaId, auditoriaId }: Props) {
+function statusSubdemandaAtiva(status: TarefaProjeto['status']): boolean {
+  return status !== 'concluida';
+}
+
+function statusAtividadeAtiva(status: AtividadeSubdemanda['status']): boolean {
+  return status !== 'concluida';
+}
+
+export default function Direcionadores() {
   const navigate = useNavigate();
-  const [programas, setProgramas] = useState<ProgramaCertificacao[]>([]);
-  const [auditorias, setAuditorias] = useState<Auditoria[]>([]);
-  const [programaIdInterno, setProgramaIdInterno] = useState<number | null>(null);
-  const [auditoriaIdInterno, setAuditoriaIdInterno] = useState<number | null>(null);
-  const [avaliacoesNc, setAvaliacoesNc] = useState<Avaliacao[]>([]);
-  const [indicadores, setIndicadores] = useState<Indicador[]>([]);
-  const [criterios, setCriterios] = useState<Criterio[]>([]);
-  const [principios, setPrincipios] = useState<Principio[]>([]);
-  const [demandas, setDemandas] = useState<Demanda[]>([]);
+  const [demandas, setDemandas] = useState<DemandaDirecionador[]>([]);
   const [mostrarApenasAtivas, setMostrarApenasAtivas] = useState(true);
   const [mostrarResumo, setMostrarResumo] = useState(false);
   const [subunidadeAtivaId, setSubunidadeAtivaId] = useState<number | 'todas'>('todas');
+  const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
 
-  const contextoTravado = Boolean(programaId && auditoriaId);
-  const programaIdEfetivo = contextoTravado ? (programaId as number) : programaIdInterno;
-  const auditoriaIdEfetivo = contextoTravado ? (auditoriaId as number) : auditoriaIdInterno;
+  const carregarDirecionadores = async () => {
+    setCarregando(true);
+    setErro('');
+    try {
+      const { data: projetos } = await api.get<Projeto[]>('/projetos');
+      const demandasMontadas = await Promise.all(
+        projetos.map(async (projeto) => {
+          const { data: tarefas } = await api.get<TarefaProjeto[]>(`/projetos/${projeto.id}/tarefas`);
+          const tarefasOrdenadas = [...tarefas].sort(
+            (a, b) => a.ordem - b.ordem || ordenarTexto(a.titulo, b.titulo) || b.id - a.id
+          );
 
-  useEffect(() => {
-    if (contextoTravado) return;
-    const carregarProgramas = async () => {
-      try {
-        const { data } = await api.get<ProgramaCertificacao[]>('/programas');
-        setProgramas(data);
-        setProgramaIdInterno((atual) => {
-          if (atual && data.some((item) => item.id === atual)) return atual;
-          return data[0]?.id || null;
-        });
-      } catch (err: any) {
-        setErro(err?.response?.data?.detail || 'Falha ao carregar programas.');
-      }
-    };
-    void carregarProgramas();
-  }, [contextoTravado]);
+          const subdemandas = await Promise.all(
+            tarefasOrdenadas.map(async (tarefa) => {
+              const { data: atividades } = await api.get<AtividadeSubdemanda[]>(`/tarefas/${tarefa.id}/atividades`);
+              return {
+                id: tarefa.id,
+                titulo: tarefa.titulo,
+                descricao: tarefa.descricao,
+                status: tarefa.status,
+                prioridade: tarefa.prioridade,
+                due_date: tarefa.due_date,
+                atividades: [...atividades].sort((a, b) => a.ordem - b.ordem || a.id - b.id),
+              } satisfies SubdemandaDirecionador;
+            })
+          );
 
-  useEffect(() => {
-    if (contextoTravado) return;
-    if (!programaIdInterno) {
-      setAuditorias([]);
-      setAuditoriaIdInterno(null);
-      return;
+          return {
+            id: projeto.id,
+            codigo: projeto.codigo,
+            nome: projeto.nome,
+            descricao: projeto.descricao,
+            status: projeto.status,
+            prioridade: projeto.prioridade,
+            data_fim_prevista: projeto.data_fim_prevista,
+            subdemandas,
+          } satisfies DemandaDirecionador;
+        })
+      );
+
+      demandasMontadas.sort((a, b) => ordenarTexto(`${a.codigo} ${a.nome}`, `${b.codigo} ${b.nome}`));
+      setDemandas(demandasMontadas);
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail || 'Falha ao carregar direcionadores de demandas.');
+    } finally {
+      setCarregando(false);
     }
-    const carregarAuditorias = async () => {
-      try {
-        const { data } = await api.get<Auditoria[]>('/auditorias', { params: { programa_id: programaIdInterno } });
-        setAuditorias(data);
-        setAuditoriaIdInterno((atual) => {
-          if (atual && data.some((item) => item.id === atual)) return atual;
-          return data[0]?.id || null;
-        });
-      } catch (err: any) {
-        setErro(err?.response?.data?.detail || 'Falha ao carregar auditorias.');
-      }
-    };
-    void carregarAuditorias();
-  }, [contextoTravado, programaIdInterno]);
+  };
 
   useEffect(() => {
-    if (!programaIdEfetivo || !auditoriaIdEfetivo) return;
-    const carregar = async () => {
-      setErro('');
-      try {
-        const [avaliacoesResp, indicadoresResp, criteriosResp, principiosResp, demandasResp] = await Promise.all([
-          api.get<Avaliacao[]>('/avaliacoes', { params: { programa_id: programaIdEfetivo, auditoria_id: auditoriaIdEfetivo } }),
-          api.get<Indicador[]>('/indicadores', { params: { programa_id: programaIdEfetivo } }),
-          api.get<Criterio[]>('/criterios', { params: { programa_id: programaIdEfetivo } }),
-          api.get<Principio[]>('/principios', { params: { programa_id: programaIdEfetivo } }),
-          api.get<Demanda[]>('/demandas', { params: { programa_id: programaIdEfetivo, auditoria_id: auditoriaIdEfetivo } }),
-        ]);
+    void carregarDirecionadores();
+  }, []);
 
-        setAvaliacoesNc(
-          avaliacoesResp.data.filter((avaliacao) => statusEhNaoConformidade(avaliacao.status_conformidade))
-        );
-        setIndicadores(indicadoresResp.data);
-        setCriterios(criteriosResp.data);
-        setPrincipios(principiosResp.data);
-        setDemandas(demandasResp.data);
-      } catch (err: any) {
-        setErro(err?.response?.data?.detail || 'Falha ao carregar diagrama de direcionadores.');
-      }
-    };
-    void carregar();
-  }, [programaIdEfetivo, auditoriaIdEfetivo]);
+  const estrutura = useMemo(() => {
+    const demandasBase = demandas
+      .map((demanda) => {
+        const subdemandasFiltradas = demanda.subdemandas
+          .map((subdemanda) => {
+            const atividadesFiltradas = mostrarApenasAtivas
+              ? subdemanda.atividades.filter((atividade) => statusAtividadeAtiva(atividade.status))
+              : subdemanda.atividades;
+            return {
+              ...subdemanda,
+              atividades: atividadesFiltradas,
+            };
+          })
+          .filter(
+            (subdemanda) =>
+              !mostrarApenasAtivas ||
+              statusSubdemandaAtiva(subdemanda.status) ||
+              subdemanda.atividades.length > 0
+          );
 
-  const estrutura = useMemo<PrincipioDirecionador[]>(() => {
-    const indicadorMap = new Map(indicadores.map((item) => [item.id, item]));
-    const criterioMap = new Map(criterios.map((item) => [item.id, item]));
-    const principioMap = new Map(principios.map((item) => [item.id, item]));
-
-    const demandasFiltradas = mostrarApenasAtivas
-      ? demandas.filter((item) => item.status_andamento !== 'concluida')
-      : demandas;
-    const demandasPorAvaliacao = new Map<number, Demanda[]>();
-    for (const demanda of demandasFiltradas) {
-      const lista = demandasPorAvaliacao.get(demanda.avaliacao_id) || [];
-      lista.push(demanda);
-      demandasPorAvaliacao.set(demanda.avaliacao_id, lista);
-    }
-
-    const porPrincipio = new Map<number, PrincipioDirecionador & { criterioMapInterno: Map<number, CriterioDirecionador> }>();
-
-    for (const avaliacao of avaliacoesNc) {
-      const indicador = indicadorMap.get(avaliacao.indicator_id);
-      if (!indicador) continue;
-      const criterio = criterioMap.get(indicador.criterio_id);
-      if (!criterio) continue;
-      const principio = principioMap.get(criterio.principio_id);
-      if (!principio) continue;
-
-      let principioNode = porPrincipio.get(principio.id);
-      if (!principioNode) {
-        principioNode = {
-          id: principio.id,
-          codigo: principio.codigo || '',
-          titulo: principio.titulo,
-          totalAvaliacoes: 0,
-          totalIdeias: 0,
-          criterios: [],
-          criterioMapInterno: new Map<number, CriterioDirecionador>(),
+        return {
+          ...demanda,
+          subdemandas: subdemandasFiltradas,
         };
-        porPrincipio.set(principio.id, principioNode);
-      }
+      })
+      .filter(
+        (demanda) =>
+          !mostrarApenasAtivas ||
+          statusDemandaAtiva(demanda.status) ||
+          demanda.subdemandas.length > 0
+      );
 
-      let criterioNode = principioNode.criterioMapInterno.get(criterio.id);
-      if (!criterioNode) {
-        criterioNode = {
-          id: criterio.id,
-          codigo: criterio.codigo || '',
-          titulo: criterio.titulo,
-          avaliacaoIds: [],
-          totalAvaliacoes: 0,
-          ideias: [],
-        };
-        principioNode.criterioMapInterno.set(criterio.id, criterioNode);
-        principioNode.criterios.push(criterioNode);
-      }
+    if (subunidadeAtivaId === 'todas') return demandasBase;
+    return demandasBase.filter((demanda) => demanda.id === subunidadeAtivaId);
+  }, [demandas, mostrarApenasAtivas, subunidadeAtivaId]);
 
-      if (!criterioNode.avaliacaoIds.includes(avaliacao.id)) {
-        criterioNode.avaliacaoIds.push(avaliacao.id);
-        criterioNode.totalAvaliacoes += 1;
-        principioNode.totalAvaliacoes += 1;
-      }
+  useEffect(() => {
+    if (subunidadeAtivaId === 'todas') return;
+    const existe = demandas.some((item) => item.id === subunidadeAtivaId);
+    if (!existe) {
+      setSubunidadeAtivaId('todas');
     }
-
-    const resultado = Array.from(porPrincipio.values()).map((principioNode) => {
-      for (const criterioNode of principioNode.criterios) {
-        const ideiasMap = new Map<number, Demanda>();
-        for (const avaliacaoId of criterioNode.avaliacaoIds) {
-          const ideias = demandasPorAvaliacao.get(avaliacaoId) || [];
-          for (const ideia of ideias) {
-            ideiasMap.set(ideia.id, ideia);
-          }
-        }
-        criterioNode.ideias = Array.from(ideiasMap.values()).sort((a, b) => {
-          const prioridade = a.prioridade.localeCompare(b.prioridade);
-          if (prioridade !== 0) return prioridade;
-          return b.id - a.id;
-        });
-        principioNode.totalIdeias += criterioNode.ideias.length;
-      }
-
-      principioNode.criterios.sort((a, b) => ordenarCodigoOuTitulo(a.codigo, a.titulo, b.codigo, b.titulo));
-      return principioNode;
-    });
-
-    resultado.sort((a, b) => ordenarCodigoOuTitulo(a.codigo, a.titulo, b.codigo, b.titulo));
-    return resultado;
-  }, [avaliacoesNc, indicadores, criterios, principios, demandas, mostrarApenasAtivas]);
-
-  const statusPorAvaliacao = useMemo(
-    () => new Map(avaliacoesNc.map((item) => [item.id, item.status_conformidade])),
-    [avaliacoesNc]
-  );
+  }, [demandas, subunidadeAtivaId]);
 
   const resumo = useMemo(() => {
     const primarios = estrutura.length;
-    const secundarios = estrutura.reduce((acc, item) => acc + item.criterios.length, 0);
-    const ideias = estrutura.reduce((acc, item) => acc + item.totalIdeias, 0);
-    const criteriosSemIdeias = estrutura.reduce(
-      (acc, item) => acc + item.criterios.filter((criterio) => criterio.ideias.length === 0).length,
+    const secundarios = estrutura.reduce((acc, item) => acc + item.subdemandas.length, 0);
+    const atividades = estrutura.reduce(
+      (acc, item) => acc + item.subdemandas.reduce((subAcc, sub) => subAcc + sub.atividades.length, 0),
+      0
+    );
+    const secundariosSemAtividades = estrutura.reduce(
+      (acc, item) => acc + item.subdemandas.filter((sub) => sub.atividades.length === 0).length,
       0
     );
     return {
       primarios,
       secundarios,
-      ideias,
-      avaliacoesNc: avaliacoesNc.length,
-      criteriosSemIdeias,
+      atividades,
+      secundariosSemAtividades,
     };
-  }, [estrutura, avaliacoesNc.length]);
-
-  useEffect(() => {
-    if (subunidadeAtivaId === 'todas') return;
-    const existe = estrutura.some((item) => item.id === subunidadeAtivaId);
-    if (!existe) {
-      setSubunidadeAtivaId('todas');
-    }
-  }, [estrutura, subunidadeAtivaId]);
-
-  const estruturaFiltrada = useMemo(() => {
-    if (subunidadeAtivaId === 'todas') return estrutura;
-    return estrutura.filter((item) => item.id === subunidadeAtivaId);
-  }, [estrutura, subunidadeAtivaId]);
-
-  if (!programaIdEfetivo || !auditoriaIdEfetivo) {
-    return <div className="card">Selecione Programa e Auditoria (Ano) para visualizar o diagrama de direcionadores.</div>;
-  }
+  }, [estrutura]);
 
   return (
     <div className="grid gap-16">
-      {!contextoTravado && (
-        <div className="card">
-          <h3>Contexto do Diagrama</h3>
-          <div className="grid two-col gap-12" style={{ marginTop: 10 }}>
-            <label className="form-row">
-              <span>Programa</span>
-              <select
-                value={programaIdInterno ?? ''}
-                onChange={(e) => setProgramaIdInterno(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">Selecione</option>
-                {programas.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.codigo} - {item.nome}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="form-row">
-              <span>Auditoria (Ano)</span>
-              <select
-                value={auditoriaIdInterno ?? ''}
-                onChange={(e) => setAuditoriaIdInterno(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">Selecione</option>
-                {auditorias.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.year} {item.tipo ? `- ${item.tipo}` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
-      )}
-
       <div className="between">
-        <h2>Diagrama de Direcionadores para Nao Conformidades</h2>
+        <h2>Diagrama de Direcionadores de Demandas</h2>
         <div className="drivers-toolbar-actions">
           <label className="checkbox-row">
             <input
@@ -329,6 +195,9 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
           <button type="button" className="btn-secondary" onClick={() => setMostrarResumo((state) => !state)}>
             {mostrarResumo ? 'Ocultar resumo' : 'Relatorio de resumo'}
           </button>
+          <button type="button" className="btn-secondary" onClick={() => void carregarDirecionadores()}>
+            Atualizar
+          </button>
           <button type="button" className="btn-secondary" onClick={() => window.print()}>
             Imprimir diagrama
           </button>
@@ -336,6 +205,7 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
       </div>
 
       {erro && <div className="error">{erro}</div>}
+      {carregando && <div className="card">Carregando direcionadores...</div>}
 
       {mostrarResumo && (
         <div className="card drivers-summary">
@@ -348,16 +218,16 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
             <strong>{resumo.secundarios}</strong>
           </div>
           <div>
-            <span>Ideias de mudanca</span>
-            <strong>{resumo.ideias}</strong>
+            <span>Atividades</span>
+            <strong>{resumo.atividades}</strong>
           </div>
           <div>
-            <span>Avaliacoes NC/OM</span>
-            <strong>{resumo.avaliacoesNc}</strong>
+            <span>Secundarios sem atividades</span>
+            <strong>{resumo.secundariosSemAtividades}</strong>
           </div>
           <div>
-            <span>Secundarios sem ideias</span>
-            <strong>{resumo.criteriosSemIdeias}</strong>
+            <span>Subunidade ativa</span>
+            <strong>{subunidadeAtivaId === 'todas' ? 'Todas' : subunidadeAtivaId}</strong>
           </div>
         </div>
       )}
@@ -371,109 +241,114 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
           >
             Todas as subunidades
           </button>
-          {estrutura.map((principioNode) => (
+          {demandas.map((demanda) => (
             <button
-              key={principioNode.id}
+              key={demanda.id}
               type="button"
-              className={subunidadeAtivaId === principioNode.id ? 'driver-subunidade-tab active' : 'driver-subunidade-tab'}
-              onClick={() => setSubunidadeAtivaId(principioNode.id)}
+              className={subunidadeAtivaId === demanda.id ? 'driver-subunidade-tab active' : 'driver-subunidade-tab'}
+              onClick={() => setSubunidadeAtivaId(demanda.id)}
             >
-              {principioNode.codigo ? `P ${principioNode.codigo}` : `Subunidade ${principioNode.id}`} - {principioNode.titulo}
+              {demanda.codigo} - {demanda.nome}
             </button>
           ))}
         </div>
       </div>
 
       <div className="card drivers-board">
-        {estruturaFiltrada.length === 0 ? (
-          <p>Nao ha avaliacoes em NC Maior, NC Menor ou Oportunidade de Melhoria para este contexto.</p>
+        {estrutura.length === 0 ? (
+          <p>Nao ha demandas/subdemandas para os filtros atuais.</p>
         ) : (
           <>
             <div className="drivers-columns-header">
-              <h3>Direcionador primario</h3>
-              <h3>Direcionador secundario</h3>
-              <h3>Ideias de mudancas</h3>
+              <h3>Direcionador primario (demanda)</h3>
+              <h3>Direcionador secundario (subdemanda)</h3>
+              <h3>Atividades</h3>
             </div>
 
             <div className="drivers-rows">
-              {estruturaFiltrada.map((principioNode) => (
-                <div key={principioNode.id} className="drivers-row">
+              {estrutura.map((demanda) => (
+                <div key={demanda.id} className="drivers-row">
                   <div className="drivers-col">
                     <article className="driver-card driver-card-primary">
-                      <span className="driver-code">
-                        {principioNode.codigo ? `P ${principioNode.codigo}` : 'Principio'}
-                      </span>
-                      <p>{principioNode.titulo}</p>
+                      <span className="driver-code">{demanda.codigo}</span>
+                      <p>{demanda.nome}</p>
                       <div className="driver-card-footer">
-                        <span>{principioNode.totalAvaliacoes} avaliacoes NC</span>
-                        <span>{principioNode.totalIdeias} ideias</span>
+                        <span>{PROJETO_STATUS_LABELS[demanda.status]}</span>
+                        <span>{PRIORIDADE_LABELS[demanda.prioridade]}</span>
+                        <span>Prazo: {demanda.data_fim_prevista || '-'}</span>
+                        <span>{demanda.subdemandas.length} subdemandas</span>
                       </div>
                     </article>
                   </div>
 
                   <div className="drivers-col">
-                    {principioNode.criterios.map((criterioNode) => (
-                      <article key={criterioNode.id} className="driver-card driver-card-secondary">
-                        <span className="driver-code">
-                          {criterioNode.codigo ? `C ${criterioNode.codigo}` : 'Criterio'}
-                        </span>
-                        <p>{criterioNode.titulo}</p>
+                    {demanda.subdemandas.length === 0 ? (
+                      <article className="driver-card driver-card-secondary">
+                        <span className="driver-code">Sem subdemanda</span>
+                        <p>Esta demanda ainda nao possui subdemandas.</p>
                         <div className="driver-card-footer">
-                          <span>{criterioNode.totalAvaliacoes} avaliacoes NC</span>
-                          <span>{criterioNode.ideias.length} ideias</span>
+                          <button type="button" className="btn-secondary" onClick={() => navigate('/demandas')}>
+                            Abrir demandas
+                          </button>
                         </div>
                       </article>
-                    ))}
+                    ) : (
+                      demanda.subdemandas.map((subdemanda) => (
+                        <article key={subdemanda.id} className="driver-card driver-card-secondary">
+                          <span className="driver-code">SUB {subdemanda.id}</span>
+                          <p>{subdemanda.titulo}</p>
+                          <div className="driver-card-footer">
+                            <span>{TAREFA_PROJETO_STATUS_LABELS[subdemanda.status]}</span>
+                            <span>{PRIORIDADE_LABELS[subdemanda.prioridade]}</span>
+                            <span>Prazo: {subdemanda.due_date || '-'}</span>
+                            <span>{subdemanda.atividades.length} atividades</span>
+                          </div>
+                        </article>
+                      ))
+                    )}
                   </div>
 
                   <div className="drivers-col">
-                    {principioNode.criterios.map((criterioNode) => (
-                      <div key={`ideias-${criterioNode.id}`} className="driver-idea-group">
-                        {criterioNode.ideias.length === 0 ? (
-                          <article className="driver-idea-card driver-idea-empty">
-                            <p>Sem ideia de mudanca para este direcionador.</p>
-                            <button
-                              type="button"
-                              className="btn-secondary"
-                              onClick={() => {
-                                if (criterioNode.avaliacaoIds[0]) {
-                                  navigate(`/avaliacoes/${criterioNode.avaliacaoIds[0]}`);
-                                }
-                              }}
-                            >
-                              Adicione ideia e teste
-                            </button>
-                          </article>
-                        ) : (
-                          criterioNode.ideias.map((demanda) => {
-                            const statusConformidade =
-                              statusPorAvaliacao.get(demanda.avaliacao_id) || 'oportunidade_melhoria';
-                            return (
+                    {demanda.subdemandas.length === 0 ? (
+                      <article className="driver-idea-card driver-idea-empty">
+                        <p>Sem subdemandas para listar atividades.</p>
+                        <button type="button" className="btn-secondary" onClick={() => navigate('/demandas')}>
+                          Cadastrar subdemanda
+                        </button>
+                      </article>
+                    ) : (
+                      demanda.subdemandas.map((subdemanda) => (
+                        <div key={`atividades-${subdemanda.id}`} className="driver-idea-group">
+                          {subdemanda.atividades.length === 0 ? (
+                            <article className="driver-idea-card driver-idea-empty">
+                              <p>Sem atividade cadastrada nesta subdemanda.</p>
+                              <button type="button" className="btn-secondary" onClick={() => navigate('/demandas')}>
+                                Cadastrar atividade
+                              </button>
+                            </article>
+                          ) : (
+                            subdemanda.atividades.map((atividade) => (
                               <article
-                                key={demanda.id}
-                                className={`driver-idea-card ${CLASSE_IDEIA_POR_STATUS[statusConformidade]}`}
+                                key={atividade.id}
+                                className={`driver-idea-card ${CLASSE_ATIVIDADE_POR_STATUS[atividade.status]}`}
                               >
                                 <div className="driver-idea-head">
-                                  <strong>{demanda.titulo}</strong>
-                                  <span>{STATUS_ANDAMENTO_LABELS[demanda.status_andamento]}</span>
+                                  <strong>{atividade.titulo}</strong>
+                                  <span>{ATIVIDADE_SUBDEMANDA_STATUS_LABELS[atividade.status]}</span>
                                 </div>
-                                <p>{demanda.descricao || 'Sem descricao cadastrada.'}</p>
+                                <p>{atividade.descricao || 'Sem descricao cadastrada.'}</p>
                                 <div className="driver-idea-footer">
-                                  <small>{STATUS_CONFORMIDADE_LABELS[statusConformidade]}</small>
-                                  <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    onClick={() => navigate(`/avaliacoes/${demanda.avaliacao_id}`)}
-                                  >
-                                    Abrir avaliacao
+                                  <small>Ordem {atividade.ordem}</small>
+                                  <button type="button" className="btn-secondary" onClick={() => navigate('/demandas')}>
+                                    Abrir demanda
                                   </button>
                                 </div>
                               </article>
-                            );
-                          })
-                        )}
-                      </div>
-                    ))}
+                            ))
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               ))}
