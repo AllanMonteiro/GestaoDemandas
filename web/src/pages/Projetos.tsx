@@ -30,7 +30,7 @@ export default function Projetos() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<number | null>(null);
-  const [demandaVinculoId, setDemandaVinculoId] = useState<number | null>(null);
+  const [abaAtiva, setAbaAtiva] = useState<'demandas' | 'subdemandas'>('demandas');
   const [tarefas, setTarefas] = useState<TarefaProjeto[]>([]);
   const [filtroStatusProjeto, setFiltroStatusProjeto] = useState('');
   const [somenteAtrasados, setSomenteAtrasados] = useState(false);
@@ -145,7 +145,6 @@ export default function Projetos() {
   useEffect(() => {
     if (!projetos.length) {
       setProjetoSelecionadoId(null);
-      setDemandaVinculoId(null);
       setTarefas([]);
       return;
     }
@@ -155,10 +154,6 @@ export default function Projetos() {
   }, [projetos, projetoSelecionadoId]);
 
   useEffect(() => {
-    setDemandaVinculoId(projetoSelecionadoId);
-  }, [projetoSelecionadoId]);
-
-  useEffect(() => {
     if (!projetoSelecionadoId) {
       setTarefas([]);
       return;
@@ -166,6 +161,11 @@ export default function Projetos() {
     void carregarTarefas(projetoSelecionadoId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetoSelecionadoId, filtroStatusTarefa]);
+
+  const abrirSubdemandasDaDemanda = (projetoId: number) => {
+    setProjetoSelecionadoId(projetoId);
+    setAbaAtiva('subdemandas');
+  };
 
   const criarProjeto = async (e: FormEvent) => {
     e.preventDefault();
@@ -208,7 +208,7 @@ export default function Projetos() {
   const criarTarefa = async (e: FormEvent) => {
     e.preventDefault();
     if (!podeCriarTarefas) return;
-    const demandaAlvoId = demandaVinculoId || projetoSelecionadoId;
+    const demandaAlvoId = projetoSelecionadoId;
     if (!demandaAlvoId) {
       setErro('Selecione uma demanda antes de criar subdemanda.');
       return;
@@ -240,7 +240,6 @@ export default function Projetos() {
       const rotuloDemanda = demandaAlvo ? `${demandaAlvo.codigo} - ${demandaAlvo.nome}` : `ID ${demandaAlvoId}`;
       setMensagem(`Subdemanda criada e vinculada a demanda ${rotuloDemanda}.`);
       setProjetoSelecionadoId(demandaAlvoId);
-      setDemandaVinculoId(demandaAlvoId);
       await carregarProjetos();
       await carregarTarefas(demandaAlvoId);
     } catch (err: any) {
@@ -308,6 +307,35 @@ export default function Projetos() {
       <h2>Gestao de Demandas</h2>
 
       <div className="card">
+        <div className="demandas-tabs">
+          <button
+            type="button"
+            className={abaAtiva === 'demandas' ? 'demandas-tab active' : 'demandas-tab'}
+            onClick={() => setAbaAtiva('demandas')}
+          >
+            Demandas
+          </button>
+          <button
+            type="button"
+            className={abaAtiva === 'subdemandas' ? 'demandas-tab active' : 'demandas-tab'}
+            onClick={() => setAbaAtiva('subdemandas')}
+            disabled={!projetos.length}
+          >
+            Subdemandas
+          </button>
+        </div>
+        <div className="muted-text" style={{ marginTop: 10 }}>
+          {demandaSelecionada
+            ? `Demanda ativa: ${demandaSelecionada.codigo} - ${demandaSelecionada.nome}`
+            : 'Selecione uma demanda para abrir as subdemandas.'}
+        </div>
+        {erro && <div className="error">{erro}</div>}
+        {mensagem && <div className="success">{mensagem}</div>}
+      </div>
+
+      {abaAtiva === 'demandas' && (
+        <>
+      <div className="card">
         <div className="filters-row">
           <label className="form-row compact">
             <span>Status da Demanda</span>
@@ -331,9 +359,6 @@ export default function Projetos() {
           </label>
         </div>
 
-        {erro && <div className="error">{erro}</div>}
-        {mensagem && <div className="success">{mensagem}</div>}
-
         <Table
           rows={projetos}
           emptyText="Nenhuma demanda encontrada."
@@ -341,8 +366,8 @@ export default function Projetos() {
             {
               title: 'Abrir',
               render: (projeto) => (
-                <button type="button" className="btn-secondary" onClick={() => setProjetoSelecionadoId(projeto.id)}>
-                  {projetoSelecionadoId === projeto.id ? 'Selecionado' : 'Selecionar'}
+                <button type="button" className="btn-secondary" onClick={() => abrirSubdemandasDaDemanda(projeto.id)}>
+                  Abrir Subdemandas
                 </button>
               ),
             },
@@ -486,6 +511,11 @@ export default function Projetos() {
         </div>
       )}
 
+        </>
+      )}
+
+      {abaAtiva === 'subdemandas' && (
+        <>
       <div className="card">
         <div className="between">
           <h3>Subdemandas da Demanda</h3>
@@ -501,6 +531,38 @@ export default function Projetos() {
             </select>
           </label>
         </div>
+
+        <label className="form-row compact" style={{ marginTop: 10 }}>
+          <span>Selecionar Demanda</span>
+          <select
+            value={projetoSelecionadoId ?? ''}
+            onChange={(e) => setProjetoSelecionadoId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Selecione</option>
+            {projetos.map((projeto) => (
+              <option key={projeto.id} value={projeto.id}>
+                {projeto.codigo} - {projeto.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {!!projetos.length && (
+          <div className="demanda-selector-grid">
+            {projetos.map((projeto) => (
+              <button
+                key={projeto.id}
+                type="button"
+                className={projetoSelecionadoId === projeto.id ? 'demanda-selector-btn active' : 'demanda-selector-btn'}
+                onClick={() => setProjetoSelecionadoId(projeto.id)}
+              >
+                <strong>{projeto.codigo}</strong>
+                <span>{projeto.nome}</span>
+                <small>{contagemSubdemandas[projeto.id] ?? 0} subdemandas</small>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="muted-text" style={{ marginTop: 8 }}>
           Demanda ativa:{' '}
@@ -566,21 +628,6 @@ export default function Projetos() {
           </p>
           <form className="grid gap-12" onSubmit={criarTarefa}>
             <div className="grid three-col gap-12">
-              <label className="form-row">
-                <span>Vincular a Demanda</span>
-                <select
-                  value={demandaVinculoId ?? ''}
-                  onChange={(e) => setDemandaVinculoId(e.target.value ? Number(e.target.value) : null)}
-                  required
-                >
-                  <option value="">Selecione</option>
-                  {projetos.map((projeto) => (
-                    <option key={projeto.id} value={projeto.id}>
-                      {projeto.codigo} - {projeto.nome}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className="form-row">
                 <span>Titulo</span>
                 <input
@@ -673,6 +720,8 @@ export default function Projetos() {
             <button type="submit">Criar Subdemanda</button>
           </form>
         </div>
+      )}
+        </>
       )}
     </div>
   );
