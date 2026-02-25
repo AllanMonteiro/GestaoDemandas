@@ -73,6 +73,7 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
   const [demandas, setDemandas] = useState<Demanda[]>([]);
   const [mostrarApenasAtivas, setMostrarApenasAtivas] = useState(true);
   const [mostrarResumo, setMostrarResumo] = useState(false);
+  const [subunidadeAtivaId, setSubunidadeAtivaId] = useState<number | 'todas'>('todas');
   const [erro, setErro] = useState('');
 
   useEffect(() => {
@@ -209,6 +210,19 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
     };
   }, [estrutura, avaliacoesNc.length]);
 
+  useEffect(() => {
+    if (subunidadeAtivaId === 'todas') return;
+    const existe = estrutura.some((item) => item.id === subunidadeAtivaId);
+    if (!existe) {
+      setSubunidadeAtivaId('todas');
+    }
+  }, [estrutura, subunidadeAtivaId]);
+
+  const estruturaFiltrada = useMemo(() => {
+    if (subunidadeAtivaId === 'todas') return estrutura;
+    return estrutura.filter((item) => item.id === subunidadeAtivaId);
+  }, [estrutura, subunidadeAtivaId]);
+
   if (!programaId || !auditoriaId) {
     return <div className="card">Selecione Programa e Auditoria (Ano) para visualizar o diagrama de direcionadores.</div>;
   }
@@ -262,8 +276,30 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
         </div>
       )}
 
+      <div className="card">
+        <div className="driver-subunidade-tabs">
+          <button
+            type="button"
+            className={subunidadeAtivaId === 'todas' ? 'driver-subunidade-tab active' : 'driver-subunidade-tab'}
+            onClick={() => setSubunidadeAtivaId('todas')}
+          >
+            Todas as subunidades
+          </button>
+          {estrutura.map((principioNode) => (
+            <button
+              key={principioNode.id}
+              type="button"
+              className={subunidadeAtivaId === principioNode.id ? 'driver-subunidade-tab active' : 'driver-subunidade-tab'}
+              onClick={() => setSubunidadeAtivaId(principioNode.id)}
+            >
+              {principioNode.codigo ? `P ${principioNode.codigo}` : `Subunidade ${principioNode.id}`} - {principioNode.titulo}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="card drivers-board">
-        {estrutura.length === 0 ? (
+        {estruturaFiltrada.length === 0 ? (
           <p>Nao ha avaliacoes em NC Maior, NC Menor ou Oportunidade de Melhoria para este contexto.</p>
         ) : (
           <>
@@ -274,7 +310,7 @@ export default function Direcionadores({ programaId, auditoriaId }: Props) {
             </div>
 
             <div className="drivers-rows">
-              {estrutura.map((principioNode) => (
+              {estruturaFiltrada.map((principioNode) => (
                 <div key={principioNode.id} className="drivers-row">
                   <div className="drivers-col">
                     <article className="driver-card driver-card-primary">

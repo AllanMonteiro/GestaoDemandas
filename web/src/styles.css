@@ -947,6 +947,29 @@ button:disabled {
   color: var(--accent-strong);
 }
 
+.driver-subunidade-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.driver-subunidade-tab {
+  background: #eaf5ff;
+  color: #174b74;
+  border-color: #c6daec;
+  max-width: min(340px, 100%);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.driver-subunidade-tab.active {
+  background: #0f70b7;
+  border-color: #0f70b7;
+  color: #fff;
+}
+
 .drivers-board {
   background: linear-gradient(180deg, #fbfdff 0%, #f5f9fd 100%);
 }
