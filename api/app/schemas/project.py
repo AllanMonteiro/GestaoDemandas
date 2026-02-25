@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.project import ProjetoPrioridadeEnum, ProjetoStatusEnum, TarefaStatusEnum
+from app.models.project import AtividadeStatusEnum, ProjetoPrioridadeEnum, ProjetoStatusEnum, TarefaStatusEnum
 
 
 PROJETO_STATUS_LABELS = {
@@ -27,6 +27,11 @@ PRIORIDADE_PROJETO_LABELS = {
     ProjetoPrioridadeEnum.media: 'Media',
     ProjetoPrioridadeEnum.alta: 'Alta',
     ProjetoPrioridadeEnum.critica: 'Critica',
+}
+
+ATIVIDADE_STATUS_LABELS = {
+    AtividadeStatusEnum.pendente: 'Pendente',
+    AtividadeStatusEnum.concluida: 'Concluida',
 }
 
 
@@ -124,6 +129,38 @@ class TarefaProjetoOut(BaseModel):
     completed_at: date | None
     estimativa_horas: int | None
     horas_registradas: int
+    ordem: int
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class AtividadeSubdemandaCreate(BaseModel):
+    titulo: str = Field(min_length=2, max_length=255)
+    descricao: str | None = None
+    status: AtividadeStatusEnum = AtividadeStatusEnum.pendente
+    ordem: int = Field(default=0, ge=0)
+
+
+class AtividadeSubdemandaUpdate(BaseModel):
+    titulo: str | None = Field(default=None, min_length=2, max_length=255)
+    descricao: str | None = None
+    status: AtividadeStatusEnum | None = None
+    ordem: int | None = Field(default=None, ge=0)
+
+
+class AtividadeSubdemandaStatusPatch(BaseModel):
+    status: AtividadeStatusEnum
+
+
+class AtividadeSubdemandaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    tarefa_id: int
+    titulo: str
+    descricao: str | None
+    status: AtividadeStatusEnum
     ordem: int
     created_by: int
     created_at: datetime

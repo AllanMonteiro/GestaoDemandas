@@ -25,7 +25,15 @@ from app.models.fsc import (
     StatusMonitoramentoCriterioEnum,
     StatusNotificacaoEnum,
 )
-from app.models.project import Projeto, ProjetoPrioridadeEnum, ProjetoStatusEnum, TarefaProjeto, TarefaStatusEnum
+from app.models.project import (
+    AtividadeStatusEnum,
+    AtividadeSubdemanda,
+    Projeto,
+    ProjetoPrioridadeEnum,
+    ProjetoStatusEnum,
+    TarefaProjeto,
+    TarefaStatusEnum,
+)
 from app.models.user import RoleEnum, User
 
 __all__ = [
@@ -59,7 +67,9 @@ __all__ = [
     'AcaoAuditEnum',
     'Projeto',
     'TarefaProjeto',
+    'AtividadeSubdemanda',
     'ProjetoStatusEnum',
     'TarefaStatusEnum',
     'ProjetoPrioridadeEnum',
+    'AtividadeStatusEnum',
 ]

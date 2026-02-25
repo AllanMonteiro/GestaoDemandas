@@ -31,6 +31,11 @@ class ProjetoPrioridadeEnum(str, enum.Enum):
     critica = 'critica'
 
 
+class AtividadeStatusEnum(str, enum.Enum):
+    pendente = 'pendente'
+    concluida = 'concluida'
+
+
 class Projeto(Base):
     __tablename__ = 'projetos'
     __table_args__ = (CheckConstraint('progresso >= 0 AND progresso <= 100', name='ck_projeto_progresso_range'),)
@@ -112,3 +117,31 @@ class TarefaProjeto(Base):
     projeto = relationship('Projeto', back_populates='tarefas')
     responsavel = relationship('User', foreign_keys=[responsavel_id], back_populates='tarefas_responsavel')
     criador = relationship('User', foreign_keys=[created_by], back_populates='tarefas_criadas')
+    atividades = relationship('AtividadeSubdemanda', back_populates='tarefa', cascade='all, delete-orphan')
+
+
+class AtividadeSubdemanda(Base):
+    __tablename__ = 'atividades_subdemanda'
+    __table_args__ = (CheckConstraint('ordem >= 0', name='ck_atividade_subdemanda_ordem_nonnegative'),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tarefa_id: Mapped[int] = mapped_column(ForeignKey('tarefas_projeto.id', ondelete='CASCADE'), nullable=False, index=True)
+    titulo: Mapped[str] = mapped_column(String(255), nullable=False)
+    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[AtividadeStatusEnum] = mapped_column(
+        Enum(AtividadeStatusEnum, name='atividade_status_enum', native_enum=False),
+        nullable=False,
+        default=AtividadeStatusEnum.pendente,
+        server_default=AtividadeStatusEnum.pendente.value,
+    )
+    ordem: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
+    created_by: Mapped[int] = mapped_column(ForeignKey('usuarios.id', ondelete='RESTRICT'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    tarefa = relationship('TarefaProjeto', back_populates='atividades')

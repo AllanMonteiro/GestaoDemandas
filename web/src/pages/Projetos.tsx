@@ -1,6 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 import {
+  ATIVIDADE_SUBDEMANDA_STATUS_LABELS,
+  AtividadeSubdemanda,
+  AtividadeSubdemandaStatus,
   api,
   Prioridade,
   PRIORIDADE_LABELS,
@@ -23,6 +26,7 @@ const STATUS_TAREFA_LIST: TarefaProjetoStatus[] = [
   'bloqueada',
   'concluida',
 ];
+const STATUS_ATIVIDADE_LIST: AtividadeSubdemandaStatus[] = ['pendente', 'concluida'];
 const PRIORIDADE_LIST: Prioridade[] = ['baixa', 'media', 'alta', 'critica'];
 
 export default function Projetos() {
@@ -32,9 +36,12 @@ export default function Projetos() {
   const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<number | null>(null);
   const [abaAtiva, setAbaAtiva] = useState<'demandas' | 'subdemandas'>('demandas');
   const [tarefas, setTarefas] = useState<TarefaProjeto[]>([]);
+  const [tarefaSelecionadaId, setTarefaSelecionadaId] = useState<number | null>(null);
+  const [atividades, setAtividades] = useState<AtividadeSubdemanda[]>([]);
   const [filtroStatusProjeto, setFiltroStatusProjeto] = useState('');
   const [somenteAtrasados, setSomenteAtrasados] = useState(false);
   const [filtroStatusTarefa, setFiltroStatusTarefa] = useState('');
+  const [filtroStatusAtividade, setFiltroStatusAtividade] = useState('');
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
   const [contagemSubdemandas, setContagemSubdemandas] = useState<Record<number, number>>({});
@@ -62,10 +69,20 @@ export default function Projetos() {
     estimativa_horas: '',
   });
 
+  const [novaAtividade, setNovaAtividade] = useState({
+    titulo: '',
+    descricao: '',
+    ordem: '',
+  });
+
   const usuariosMap = useMemo(() => new Map(usuarios.map((u) => [u.id, u.nome])), [usuarios]);
   const demandaSelecionada = useMemo(
     () => projetos.find((projeto) => projeto.id === projetoSelecionadoId) || null,
     [projetos, projetoSelecionadoId]
+  );
+  const subdemandaSelecionada = useMemo(
+    () => tarefas.find((tarefa) => tarefa.id === tarefaSelecionadaId) || null,
+    [tarefas, tarefaSelecionadaId]
   );
 
   const podeGerenciarProjetos = usuarioAtual?.role === 'ADMIN' || usuarioAtual?.role === 'GESTOR';
@@ -75,6 +92,7 @@ export default function Projetos() {
     usuarioAtual?.role === 'GESTOR' ||
     usuarioAtual?.role === 'AUDITOR' ||
     usuarioAtual?.role === 'RESPONSAVEL';
+  const podeCriarAtividades = podeCriarTarefas || usuarioAtual?.role === 'RESPONSAVEL';
 
   const carregarContexto = async () => {
     try {
@@ -133,6 +151,20 @@ export default function Projetos() {
     }
   };
 
+  const carregarAtividades = async (tarefaId: number) => {
+    setErro('');
+    try {
+      const { data } = await api.get<AtividadeSubdemanda[]>(`/tarefas/${tarefaId}/atividades`, {
+        params: {
+          status_atividade: filtroStatusAtividade || undefined,
+        },
+      });
+      setAtividades(data);
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail || 'Falha ao carregar atividades.');
+    }
+  };
+
   useEffect(() => {
     void carregarContexto();
   }, []);
@@ -156,11 +188,33 @@ export default function Projetos() {
   useEffect(() => {
     if (!projetoSelecionadoId) {
       setTarefas([]);
+      setTarefaSelecionadaId(null);
+      setAtividades([]);
       return;
     }
     void carregarTarefas(projetoSelecionadoId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetoSelecionadoId, filtroStatusTarefa]);
+
+  useEffect(() => {
+    if (!tarefas.length) {
+      setTarefaSelecionadaId(null);
+      setAtividades([]);
+      return;
+    }
+    if (!tarefaSelecionadaId || !tarefas.some((tarefa) => tarefa.id === tarefaSelecionadaId)) {
+      setTarefaSelecionadaId(tarefas[0].id);
+    }
+  }, [tarefas, tarefaSelecionadaId]);
+
+  useEffect(() => {
+    if (!tarefaSelecionadaId) {
+      setAtividades([]);
+      return;
+    }
+    void carregarAtividades(tarefaSelecionadaId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tarefaSelecionadaId, filtroStatusAtividade]);
 
   const abrirSubdemandasDaDemanda = (projetoId: number) => {
     setProjetoSelecionadoId(projetoId);
@@ -278,6 +332,58 @@ export default function Projetos() {
   const alternarCheckSubdemanda = async (tarefa: TarefaProjeto, checked: boolean) => {
     const novoStatus: TarefaProjetoStatus = checked ? 'concluida' : 'a_fazer';
     await atualizarStatusTarefa(tarefa.id, novoStatus);
+  };
+
+  const criarAtividade = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!podeCriarAtividades || !tarefaSelecionadaId) return;
+    setErro('');
+    setMensagem('');
+    try {
+      await api.post(`/tarefas/${tarefaSelecionadaId}/atividades`, {
+        titulo: novaAtividade.titulo.trim(),
+        descricao: novaAtividade.descricao || undefined,
+        ordem: novaAtividade.ordem ? Number(novaAtividade.ordem) : 0,
+      });
+      setNovaAtividade({ titulo: '', descricao: '', ordem: '' });
+      setMensagem('Atividade cadastrada na subdemanda.');
+      await carregarAtividades(tarefaSelecionadaId);
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail || 'Falha ao cadastrar atividade.');
+    }
+  };
+
+  const atualizarStatusAtividade = async (atividadeId: number, statusAtividade: AtividadeSubdemandaStatus) => {
+    if (!podeEditarTarefa) return;
+    setErro('');
+    setMensagem('');
+    try {
+      await api.patch(`/atividades/${atividadeId}/status`, { status: statusAtividade });
+      setMensagem('Status da atividade atualizado.');
+      if (tarefaSelecionadaId) {
+        await carregarAtividades(tarefaSelecionadaId);
+      }
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail || 'Falha ao atualizar atividade.');
+    }
+  };
+
+  const alternarCheckAtividade = async (atividade: AtividadeSubdemanda, checked: boolean) => {
+    const novoStatus: AtividadeSubdemandaStatus = checked ? 'concluida' : 'pendente';
+    await atualizarStatusAtividade(atividade.id, novoStatus);
+  };
+
+  const removerAtividade = async (atividadeId: number) => {
+    if (!podeCriarAtividades || !tarefaSelecionadaId) return;
+    setErro('');
+    setMensagem('');
+    try {
+      await api.delete(`/atividades/${atividadeId}`);
+      setMensagem('Atividade removida.');
+      await carregarAtividades(tarefaSelecionadaId);
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail || 'Falha ao remover atividade.');
+    }
   };
 
   const removerProjeto = async (projetoId: number) => {
@@ -595,6 +701,18 @@ export default function Projetos() {
                   </label>
                 ),
               },
+              {
+                title: 'Atividades',
+                render: (tarefa) => (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setTarefaSelecionadaId(tarefa.id)}
+                  >
+                    {tarefaSelecionadaId === tarefa.id ? 'Selecionada' : 'Abrir'}
+                  </button>
+                ),
+              },
               { title: 'Titulo', render: (tarefa) => tarefa.titulo },
               {
                 title: 'Responsavel',
@@ -636,6 +754,118 @@ export default function Projetos() {
               },
             ]}
           />
+        )}
+      </div>
+
+      <div className="card">
+        <div className="between">
+          <h3>Atividades da Subdemanda</h3>
+          <label className="form-row compact">
+            <span>Status</span>
+            <select value={filtroStatusAtividade} onChange={(e) => setFiltroStatusAtividade(e.target.value)}>
+              <option value="">Todos</option>
+              {STATUS_ATIVIDADE_LIST.map((statusAtividade) => (
+                <option key={statusAtividade} value={statusAtividade}>
+                  {ATIVIDADE_SUBDEMANDA_STATUS_LABELS[statusAtividade]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {!!tarefas.length && (
+          <div className="subdemanda-tabs" style={{ marginTop: 10 }}>
+            {tarefas.map((tarefa) => (
+              <button
+                key={tarefa.id}
+                type="button"
+                className={tarefaSelecionadaId === tarefa.id ? 'subdemanda-tab active' : 'subdemanda-tab'}
+                onClick={() => setTarefaSelecionadaId(tarefa.id)}
+              >
+                {tarefa.titulo}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="muted-text" style={{ marginTop: 8 }}>
+          Subdemanda ativa: <strong>{subdemandaSelecionada ? subdemandaSelecionada.titulo : 'nenhuma'}</strong>
+        </div>
+
+        {!tarefaSelecionadaId && (
+          <div className="muted-text">Selecione uma subdemanda para cadastrar e acompanhar atividades.</div>
+        )}
+
+        {tarefaSelecionadaId && (
+          <>
+            {atividades.length === 0 ? (
+              <div className="muted-text" style={{ marginTop: 10 }}>
+                Sem atividades para os filtros atuais.
+              </div>
+            ) : (
+              <ul className="atividade-checklist">
+                {atividades.map((atividade) => (
+                  <li
+                    key={atividade.id}
+                    className={atividade.status === 'concluida' ? 'atividade-item done' : 'atividade-item'}
+                  >
+                    <label className="subdemanda-check atividade-main">
+                      <input
+                        type="checkbox"
+                        checked={atividade.status === 'concluida'}
+                        onChange={(e) => void alternarCheckAtividade(atividade, e.target.checked)}
+                        disabled={!podeEditarTarefa}
+                      />
+                      <span className="atividade-title">{atividade.titulo}</span>
+                    </label>
+                    <div className="atividade-meta">
+                      <small>
+                        {ATIVIDADE_SUBDEMANDA_STATUS_LABELS[atividade.status]} | Ordem {atividade.ordem}
+                      </small>
+                      {atividade.descricao && <p>{atividade.descricao}</p>}
+                    </div>
+                    {podeCriarAtividades && (
+                      <button type="button" className="btn-danger" onClick={() => removerAtividade(atividade.id)}>
+                        Remover
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+
+        {tarefaSelecionadaId && podeCriarAtividades && (
+          <form className="grid gap-12" style={{ marginTop: 12 }} onSubmit={criarAtividade}>
+            <div className="grid three-col gap-12">
+              <label className="form-row">
+                <span>Titulo da Atividade</span>
+                <input
+                  value={novaAtividade.titulo}
+                  onChange={(e) => setNovaAtividade((prev) => ({ ...prev, titulo: e.target.value }))}
+                  required
+                />
+              </label>
+              <label className="form-row">
+                <span>Ordem</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={novaAtividade.ordem}
+                  onChange={(e) => setNovaAtividade((prev) => ({ ...prev, ordem: e.target.value }))}
+                />
+              </label>
+              <label className="form-row">
+                <span>Descricao</span>
+                <input
+                  value={novaAtividade.descricao}
+                  onChange={(e) => setNovaAtividade((prev) => ({ ...prev, descricao: e.target.value }))}
+                />
+              </label>
+            </div>
+            <button type="submit">Cadastrar Atividade</button>
+          </form>
         )}
       </div>
 

@@ -663,6 +663,82 @@ button:disabled {
   font-weight: 600;
 }
 
+.atividade-checklist {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.atividade-item {
+  border: 1px solid #cfe0ef;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.atividade-item.done {
+  background: #edf7ee;
+  border-color: #baddbf;
+}
+
+.atividade-main {
+  align-items: center;
+}
+
+.atividade-title {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #1b466b !important;
+}
+
+.atividade-item.done .atividade-title {
+  text-decoration: line-through;
+  color: #3e6f57 !important;
+}
+
+.atividade-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.atividade-meta small {
+  color: #4d6a86;
+  font-weight: 600;
+}
+
+.atividade-meta p {
+  margin: 0;
+  color: #355673;
+  line-height: 1.3;
+}
+
+.subdemanda-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.subdemanda-tab {
+  background: #ecf5fe;
+  color: #214f75;
+  border-color: #c8dcef;
+  text-align: left;
+  max-width: min(320px, 100%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subdemanda-tab.active {
+  background: #0f70b7;
+  border-color: #0f70b7;
+  color: #fff;
+}
+
 .table-wrapper {
   width: 100%;
   margin-top: 8px;

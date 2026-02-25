@@ -7,12 +7,24 @@ from sqlalchemy.orm import Session
 from app.core.rbac import require_roles
 from app.core.security import get_current_user
 from app.db.session import get_db
-from app.models.project import Projeto, ProjetoPrioridadeEnum, ProjetoStatusEnum, TarefaProjeto, TarefaStatusEnum
+from app.models.project import (
+    AtividadeStatusEnum,
+    AtividadeSubdemanda,
+    Projeto,
+    ProjetoPrioridadeEnum,
+    ProjetoStatusEnum,
+    TarefaProjeto,
+    TarefaStatusEnum,
+)
 from app.models.user import RoleEnum, User
 from app.schemas.fsc import MensagemOut
 from app.schemas.project import (
     PROJETO_STATUS_LABELS,
     TAREFA_STATUS_LABELS,
+    AtividadeSubdemandaCreate,
+    AtividadeSubdemandaOut,
+    AtividadeSubdemandaStatusPatch,
+    AtividadeSubdemandaUpdate,
     ProjetosDashboardOut,
     ProjetoCreate,
     ProjetoOut,
@@ -50,6 +62,13 @@ def _buscar_tarefa(db: Session, tarefa_id: int) -> TarefaProjeto:
     return tarefa
 
 
+def _buscar_atividade(db: Session, atividade_id: int) -> AtividadeSubdemanda:
+    atividade = db.get(AtividadeSubdemanda, atividade_id)
+    if not atividade:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Atividade nao encontrada.')
+    return atividade
+
+
 def _validar_datas(data_inicio: date | None, data_fim: date | None, contexto: str) -> None:
     if data_inicio and data_fim and data_fim < data_inicio:
         raise HTTPException(
@@ -74,6 +93,22 @@ def _validar_acesso_projeto(db: Session, projeto: Projeto, current_user: User) -
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Voce so pode acessar projetos atribuidos a voce.',
         )
+
+
+def _validar_acesso_tarefa(tarefa: TarefaProjeto, current_user: User) -> None:
+    if current_user.role == RoleEnum.RESPONSAVEL and tarefa.responsavel_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Voce so pode acessar tarefas atribuidas a voce.',
+        )
+
+
+def _validar_gestao_atividade(tarefa: TarefaProjeto, current_user: User) -> None:
+    if current_user.role in (RoleEnum.ADMIN, RoleEnum.GESTOR, RoleEnum.AUDITOR):
+        return
+    if current_user.role == RoleEnum.RESPONSAVEL and tarefa.responsavel_id == current_user.id:
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Voce nao possui permissao para esta acao.')
 
 
 def _validar_codigo_unico(db: Session, codigo: str, projeto_id: int | None = None) -> None:
@@ -372,6 +407,111 @@ def remover_tarefa(
     db.delete(tarefa)
     db.commit()
     return MensagemOut(mensagem='Tarefa removida com sucesso.')
+
+
+@router.get('/tarefas/{tarefa_id}/atividades', response_model=list[AtividadeSubdemandaOut])
+def listar_atividades_subdemanda(
+    tarefa_id: int,
+    status_atividade: AtividadeStatusEnum | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[AtividadeSubdemandaOut]:
+    tarefa = _buscar_tarefa(db, tarefa_id)
+    _validar_acesso_tarefa(tarefa, current_user)
+
+    query = select(AtividadeSubdemanda).where(AtividadeSubdemanda.tarefa_id == tarefa_id)
+    if status_atividade:
+        query = query.where(AtividadeSubdemanda.status == status_atividade)
+    query = query.order_by(AtividadeSubdemanda.ordem.asc(), AtividadeSubdemanda.id.asc())
+    return list(db.scalars(query).all())
+
+
+@router.post('/tarefas/{tarefa_id}/atividades', response_model=AtividadeSubdemandaOut, status_code=status.HTTP_201_CREATED)
+def criar_atividade_subdemanda(
+    tarefa_id: int,
+    payload: AtividadeSubdemandaCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AtividadeSubdemandaOut:
+    tarefa = _buscar_tarefa(db, tarefa_id)
+    _validar_gestao_atividade(tarefa, current_user)
+
+    atividade = AtividadeSubdemanda(
+        **payload.model_dump(),
+        tarefa_id=tarefa_id,
+        created_by=current_user.id,
+    )
+    db.add(atividade)
+    db.commit()
+    db.refresh(atividade)
+    return atividade
+
+
+@router.patch('/atividades/{atividade_id}', response_model=AtividadeSubdemandaOut)
+def atualizar_atividade_subdemanda(
+    atividade_id: int,
+    payload: AtividadeSubdemandaUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AtividadeSubdemandaOut:
+    atividade = _buscar_atividade(db, atividade_id)
+    tarefa = _buscar_tarefa(db, atividade.tarefa_id)
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Nenhum campo informado para atualizacao.')
+
+    if current_user.role == RoleEnum.RESPONSAVEL:
+        if tarefa.responsavel_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Voce so pode atualizar atividades de tarefas atribuidas a voce.',
+            )
+        permitidos = {'status'}
+        if not set(data.keys()).issubset(permitidos):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Responsavel so pode atualizar status da atividade.',
+            )
+    else:
+        _validar_gestao_atividade(tarefa, current_user)
+
+    for field, value in data.items():
+        setattr(atividade, field, value)
+
+    db.commit()
+    db.refresh(atividade)
+    return atividade
+
+
+@router.patch('/atividades/{atividade_id}/status', response_model=AtividadeSubdemandaOut)
+def atualizar_status_atividade_subdemanda(
+    atividade_id: int,
+    payload: AtividadeSubdemandaStatusPatch,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AtividadeSubdemandaOut:
+    atividade = _buscar_atividade(db, atividade_id)
+    tarefa = _buscar_tarefa(db, atividade.tarefa_id)
+    _validar_gestao_atividade(tarefa, current_user)
+
+    atividade.status = payload.status
+    db.commit()
+    db.refresh(atividade)
+    return atividade
+
+
+@router.delete('/atividades/{atividade_id}', response_model=MensagemOut)
+def remover_atividade_subdemanda(
+    atividade_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MensagemOut:
+    atividade = _buscar_atividade(db, atividade_id)
+    tarefa = _buscar_tarefa(db, atividade.tarefa_id)
+    _validar_gestao_atividade(tarefa, current_user)
+    db.delete(atividade)
+    db.commit()
+    return MensagemOut(mensagem='Atividade removida com sucesso.')
 
 
 @router.get('/projetos-dashboard/resumo', response_model=ProjetosDashboardOut)

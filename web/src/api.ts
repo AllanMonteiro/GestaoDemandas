@@ -406,6 +406,13 @@ export const TAREFA_PROJETO_STATUS_LABELS: Record<TarefaProjetoStatus, string> =
   bloqueada: 'Bloqueada',
 };
 
+export type AtividadeSubdemandaStatus = 'pendente' | 'concluida';
+
+export const ATIVIDADE_SUBDEMANDA_STATUS_LABELS: Record<AtividadeSubdemandaStatus, string> = {
+  pendente: 'Pendente',
+  concluida: 'Concluida',
+};
+
 export interface Projeto {
   id: number;
   codigo: string;
@@ -436,6 +443,18 @@ export interface TarefaProjeto {
   completed_at?: string | null;
   estimativa_horas?: number | null;
   horas_registradas: number;
+  ordem: number;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AtividadeSubdemanda {
+  id: number;
+  tarefa_id: number;
+  titulo: string;
+  descricao?: string | null;
+  status: AtividadeSubdemandaStatus;
   ordem: number;
   created_by: number;
   created_at: string;
