@@ -1,4 +1,4 @@
-﻿import { FormEvent, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api, LoginResponse } from '../api';
@@ -33,8 +33,8 @@ export default function Login({ onLogin }: Props) {
   return (
     <div className="page-center">
       <form className="card login-card" onSubmit={submit}>
-        <h1>Sistema de Certificações</h1>
-        <p>Gerenciamento de conformidade, auditoria anual e rastreabilidade.</p>
+        <h1>Gestão de Demandas</h1>
+        <p>Controle de fluxo, prazos e execução de demandas operacionais e estratégicas.</p>
 
         <label className="form-row">
           <span>Email</span>

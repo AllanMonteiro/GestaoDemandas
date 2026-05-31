@@ -2,24 +2,26 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.project import AtividadeStatusEnum, ProjetoPrioridadeEnum, ProjetoStatusEnum, TarefaStatusEnum
+from app.models.project import AtividadeStatusEnum, ProjetoPrioridadeEnum, ProjetoStatusEnum, TarefaStatusEnum, DemandaHistoricoTipoEnum
 
 
 PROJETO_STATUS_LABELS = {
     ProjetoStatusEnum.planejamento: 'Planejamento',
     ProjetoStatusEnum.em_andamento: 'Em Andamento',
     ProjetoStatusEnum.pausado: 'Pausado',
-    ProjetoStatusEnum.concluido: 'Concluido',
+    ProjetoStatusEnum.concluido: 'Concluído',
     ProjetoStatusEnum.cancelado: 'Cancelado',
 }
 
 TAREFA_STATUS_LABELS = {
-    TarefaStatusEnum.backlog: 'Backlog',
-    TarefaStatusEnum.a_fazer: 'A Fazer',
-    TarefaStatusEnum.em_andamento: 'Em Andamento',
-    TarefaStatusEnum.em_revisao: 'Em Revisao',
-    TarefaStatusEnum.concluida: 'Concluida',
-    TarefaStatusEnum.bloqueada: 'Bloqueada',
+    TarefaStatusEnum.nova: 'Nova',
+    TarefaStatusEnum.triagem: 'Em Triagem',
+    TarefaStatusEnum.aguardando_info: 'Aguardando Informações',
+    TarefaStatusEnum.aprovada: 'Aprovada',
+    TarefaStatusEnum.execucao: 'Em Execução',
+    TarefaStatusEnum.validacao: 'Em Validação',
+    TarefaStatusEnum.concluida: 'Concluída',
+    TarefaStatusEnum.cancelada: 'Cancelada',
 }
 
 PRIORIDADE_PROJETO_LABELS = {
@@ -86,9 +88,11 @@ class ProjetoOut(BaseModel):
 class TarefaProjetoCreate(BaseModel):
     titulo: str = Field(min_length=3, max_length=255)
     descricao: str | None = None
-    status: TarefaStatusEnum = TarefaStatusEnum.backlog
+    status: TarefaStatusEnum = TarefaStatusEnum.nova
     prioridade: ProjetoPrioridadeEnum = ProjetoPrioridadeEnum.media
     responsavel_id: int | None = None
+    solicitante_id: int | None = None
+    setor: str | None = None
     start_date: date | None = None
     due_date: date | None = None
     estimativa_horas: int | None = Field(default=None, ge=0)
@@ -102,6 +106,9 @@ class TarefaProjetoUpdate(BaseModel):
     status: TarefaStatusEnum | None = None
     prioridade: ProjetoPrioridadeEnum | None = None
     responsavel_id: int | None = None
+    solicitante_id: int | None = None
+    setor: str | None = None
+    motivo_cancelamento: str | None = None
     start_date: date | None = None
     due_date: date | None = None
     completed_at: date | None = None
@@ -124,6 +131,9 @@ class TarefaProjetoOut(BaseModel):
     status: TarefaStatusEnum
     prioridade: ProjetoPrioridadeEnum
     responsavel_id: int | None
+    solicitante_id: int | None
+    setor: str | None
+    motivo_cancelamento: str | None
     start_date: date | None
     due_date: date | None
     completed_at: date | None
@@ -135,9 +145,31 @@ class TarefaProjetoOut(BaseModel):
     updated_at: datetime
 
 
+class DemandaHistoricoCreate(BaseModel):
+    tipo: DemandaHistoricoTipoEnum
+    conteudo: str
+    old_status: str | None = None
+    new_status: str | None = None
+
+
+class DemandaHistoricoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    demanda_id: int
+    tipo: DemandaHistoricoTipoEnum
+    conteudo: str
+    old_status: str | None
+    new_status: str | None
+    created_by: int | None
+    created_at: datetime
+
+
 class AtividadeSubdemandaCreate(BaseModel):
     titulo: str = Field(min_length=2, max_length=255)
     descricao: str | None = None
+    setor: str | None = Field(default=None, max_length=120)
+    subatividade: str | None = Field(default=None, max_length=120)
     status: AtividadeStatusEnum = AtividadeStatusEnum.pendente
     ordem: int = Field(default=0, ge=0)
 
@@ -145,6 +177,8 @@ class AtividadeSubdemandaCreate(BaseModel):
 class AtividadeSubdemandaUpdate(BaseModel):
     titulo: str | None = Field(default=None, min_length=2, max_length=255)
     descricao: str | None = None
+    setor: str | None = Field(default=None, max_length=120)
+    subatividade: str | None = Field(default=None, max_length=120)
     status: AtividadeStatusEnum | None = None
     ordem: int | None = Field(default=None, ge=0)
 
@@ -160,11 +194,63 @@ class AtividadeSubdemandaOut(BaseModel):
     tarefa_id: int
     titulo: str
     descricao: str | None
+    setor: str | None
+    subatividade: str | None
     status: AtividadeStatusEnum
     ordem: int
     created_by: int
     created_at: datetime
     updated_at: datetime
+
+
+class AtividadeSetorConfigCreate(BaseModel):
+    nome: str = Field(min_length=2, max_length=120)
+    ativo: bool = True
+    ordem: int = Field(default=0, ge=0)
+
+
+class AtividadeSetorConfigUpdate(BaseModel):
+    nome: str | None = Field(default=None, min_length=2, max_length=120)
+    ativo: bool | None = None
+    ordem: int | None = Field(default=None, ge=0)
+
+
+class AtividadeSubatividadeConfigCreate(BaseModel):
+    setor_id: int
+    nome: str = Field(min_length=2, max_length=120)
+    ativo: bool = True
+    ordem: int = Field(default=0, ge=0)
+
+
+class AtividadeSubatividadeConfigUpdate(BaseModel):
+    setor_id: int | None = None
+    nome: str | None = Field(default=None, min_length=2, max_length=120)
+    ativo: bool | None = None
+    ordem: int | None = Field(default=None, ge=0)
+
+
+class AtividadeSubatividadeConfigOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    setor_id: int
+    nome: str
+    ativo: bool
+    ordem: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class AtividadeSetorConfigOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nome: str
+    ativo: bool
+    ordem: int
+    created_at: datetime
+    updated_at: datetime
+    subatividades: list[AtividadeSubatividadeConfigOut] = Field(default_factory=list)
 
 
 class ResumoProjetosStatusItem(BaseModel):

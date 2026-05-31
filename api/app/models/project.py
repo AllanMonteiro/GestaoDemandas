@@ -1,7 +1,7 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -16,12 +16,21 @@ class ProjetoStatusEnum(str, enum.Enum):
 
 
 class TarefaStatusEnum(str, enum.Enum):
-    backlog = 'backlog'
-    a_fazer = 'a_fazer'
-    em_andamento = 'em_andamento'
-    em_revisao = 'em_revisao'
+    nova = 'nova'
+    triagem = 'triagem'
+    aguardando_info = 'aguardando_info'
+    aprovada = 'aprovada'
+    execucao = 'execucao'
+    validacao = 'validacao'
     concluida = 'concluida'
-    bloqueada = 'bloqueada'
+    cancelada = 'cancelada'
+
+
+class DemandaHistoricoTipoEnum(str, enum.Enum):
+    comentario = 'comentario'
+    status = 'status'
+    anexo = 'anexo'
+    sistema = 'sistema'
 
 
 class ProjetoPrioridadeEnum(str, enum.Enum):
@@ -87,18 +96,23 @@ class TarefaProjeto(Base):
     titulo: Mapped[str] = mapped_column(String(255), nullable=False)
     descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[TarefaStatusEnum] = mapped_column(
-        Enum(TarefaStatusEnum, name='tarefa_status_enum', native_enum=False),
+        Enum(TarefaStatusEnum, name='demanda_status_enum', native_enum=False),
         nullable=False,
-        default=TarefaStatusEnum.backlog,
-        server_default=TarefaStatusEnum.backlog.value,
+        default=TarefaStatusEnum.nova,
+        server_default=TarefaStatusEnum.nova.value,
+        index=True,
     )
     prioridade: Mapped[ProjetoPrioridadeEnum] = mapped_column(
         Enum(ProjetoPrioridadeEnum, name='tarefa_prioridade_enum', native_enum=False),
         nullable=False,
         default=ProjetoPrioridadeEnum.media,
         server_default=ProjetoPrioridadeEnum.media.value,
+        index=True,
     )
     responsavel_id: Mapped[int | None] = mapped_column(ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True, index=True)
+    solicitante_id: Mapped[int | None] = mapped_column(ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True, index=True)
+    setor: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    motivo_cancelamento: Mapped[str | None] = mapped_column(Text, nullable=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     completed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -116,8 +130,74 @@ class TarefaProjeto(Base):
 
     projeto = relationship('Projeto', back_populates='tarefas')
     responsavel = relationship('User', foreign_keys=[responsavel_id], back_populates='tarefas_responsavel')
+    solicitante = relationship('User', foreign_keys=[solicitante_id])
     criador = relationship('User', foreign_keys=[created_by], back_populates='tarefas_criadas')
     atividades = relationship('AtividadeSubdemanda', back_populates='tarefa', cascade='all, delete-orphan')
+    historico = relationship('DemandaHistorico', back_populates='demanda', cascade='all, delete-orphan')
+
+
+class AtividadeSetorConfig(Base):
+    __tablename__ = 'atividades_setores_config'
+    __table_args__ = (
+        UniqueConstraint('nome', name='uq_atividade_setor_config_nome'),
+        CheckConstraint('ordem >= 0', name='ck_atividade_setor_config_ordem_nonnegative'),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    nome: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
+    ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default='true')
+    ordem: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    subatividades = relationship('AtividadeSubatividadeConfig', back_populates='setor', cascade='all, delete-orphan')
+
+
+class AtividadeSubatividadeConfig(Base):
+    __tablename__ = 'atividades_subatividades_config'
+    __table_args__ = (
+        UniqueConstraint('setor_id', 'nome', name='uq_atividade_subatividade_config_setor_nome'),
+        CheckConstraint('ordem >= 0', name='ck_atividade_subatividade_config_ordem_nonnegative'),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    setor_id: Mapped[int] = mapped_column(ForeignKey('atividades_setores_config.id', ondelete='CASCADE'), nullable=False, index=True)
+    nome: Mapped[str] = mapped_column(String(120), nullable=False)
+    ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default='true')
+    ordem: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    setor = relationship('AtividadeSetorConfig', back_populates='subatividades')
+
+
+class DemandaHistorico(Base):
+    __tablename__ = 'demandas_historico'
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    demanda_id: Mapped[int] = mapped_column(ForeignKey('tarefas_projeto.id', ondelete='CASCADE'), nullable=False, index=True)
+    tipo: Mapped[DemandaHistoricoTipoEnum] = mapped_column(
+        Enum(DemandaHistoricoTipoEnum, name='demanda_historico_tipo_enum', native_enum=False),
+        nullable=False
+    )
+    conteudo: Mapped[str] = mapped_column(Text, nullable=False)
+    old_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    new_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    demanda = relationship('TarefaProjeto', back_populates='historico')
+    autor = relationship('User')
 
 
 class AtividadeSubdemanda(Base):
@@ -128,6 +208,8 @@ class AtividadeSubdemanda(Base):
     tarefa_id: Mapped[int] = mapped_column(ForeignKey('tarefas_projeto.id', ondelete='CASCADE'), nullable=False, index=True)
     titulo: Mapped[str] = mapped_column(String(255), nullable=False)
     descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    setor: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    subatividade: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     status: Mapped[AtividadeStatusEnum] = mapped_column(
         Enum(AtividadeStatusEnum, name='atividade_status_enum', native_enum=False),
         nullable=False,

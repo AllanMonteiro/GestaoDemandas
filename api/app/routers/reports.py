@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, extract, func, or_, select
@@ -10,7 +10,7 @@ from app.models.fsc import (
     AuditoriaAno,
     AvaliacaoIndicador,
     Criterio,
-    Demanda,
+    DemandaFSC,
     Evidencia,
     Indicador,
     ProgramaCertificacao,
@@ -138,15 +138,15 @@ def demandas_atrasadas(
     _buscar_auditoria(db, auditoria_id)
 
     demandas = db.scalars(
-        select(Demanda)
-        .join(AvaliacaoIndicador, AvaliacaoIndicador.id == Demanda.avaliacao_id)
+        select(DemandaFSC)
+        .join(AvaliacaoIndicador, AvaliacaoIndicador.id == DemandaFSC.avaliacao_id)
         .where(
             AvaliacaoIndicador.auditoria_ano_id == auditoria_id,
-            Demanda.due_date.is_not(None),
-            Demanda.due_date < date.today(),
-            Demanda.status_andamento != StatusAndamentoEnum.concluida,
+            DemandaFSC.due_date.is_not(None),
+            DemandaFSC.due_date < date.today(),
+            DemandaFSC.status_andamento != StatusAndamentoEnum.concluida,
         )
-        .order_by(Demanda.due_date.asc(), Demanda.id.desc())
+        .order_by(DemandaFSC.due_date.asc(), DemandaFSC.id.desc())
     ).all()
     return list(demandas)
 
@@ -273,38 +273,38 @@ def cronograma_nc(
 
     query = (
         select(
-            Demanda.id.label('demanda_id'),
+            DemandaFSC.id.label('demanda_id'),
             AvaliacaoIndicador.id.label('avaliacao_id'),
             AuditoriaAno.id.label('auditoria_id'),
-            Demanda.programa_id.label('programa_id'),
+            DemandaFSC.programa_id.label('programa_id'),
             Indicador.titulo.label('indicador_titulo'),
-            Demanda.titulo.label('titulo'),
+            DemandaFSC.titulo.label('titulo'),
             User.nome.label('responsavel_nome'),
-            Demanda.prioridade.label('prioridade'),
-            Demanda.status_andamento.label('status_andamento'),
+            DemandaFSC.prioridade.label('prioridade'),
+            DemandaFSC.status_andamento.label('status_andamento'),
             AvaliacaoIndicador.status_conformidade.label('status_conformidade'),
-            func.coalesce(Demanda.start_date, Demanda.due_date, AuditoriaAno.data_inicio).label('data_inicio'),
-            func.coalesce(Demanda.due_date, Demanda.start_date, AuditoriaAno.data_fim).label('data_fim'),
+            func.coalesce(DemandaFSC.start_date, DemandaFSC.due_date, AuditoriaAno.data_inicio).label('data_inicio'),
+            func.coalesce(DemandaFSC.due_date, DemandaFSC.start_date, AuditoriaAno.data_fim).label('data_fim'),
         )
-        .join(AvaliacaoIndicador, AvaliacaoIndicador.id == Demanda.avaliacao_id)
+        .join(AvaliacaoIndicador, AvaliacaoIndicador.id == DemandaFSC.avaliacao_id)
         .join(AuditoriaAno, AuditoriaAno.id == AvaliacaoIndicador.auditoria_ano_id)
         .join(Indicador, Indicador.id == AvaliacaoIndicador.indicator_id)
-        .outerjoin(User, User.id == Demanda.responsavel_id)
+        .outerjoin(User, User.id == DemandaFSC.responsavel_id)
         .where(
-            Demanda.programa_id == programa_id,
+            DemandaFSC.programa_id == programa_id,
             AvaliacaoIndicador.auditoria_ano_id == auditoria_id,
             AvaliacaoIndicador.status_conformidade.in_(STATUS_CRONOGRAMA),
-            or_(Demanda.start_date.is_not(None), Demanda.due_date.is_not(None)),
+            or_(DemandaFSC.start_date.is_not(None), DemandaFSC.due_date.is_not(None)),
         )
         .order_by(
-            Demanda.start_date.asc().nulls_last(),
-            Demanda.due_date.asc().nulls_last(),
-            Demanda.id.desc(),
+            DemandaFSC.start_date.asc().nulls_last(),
+            DemandaFSC.due_date.asc().nulls_last(),
+            DemandaFSC.id.desc(),
         )
     )
 
     if not incluir_concluidas:
-        query = query.where(Demanda.status_andamento != StatusAndamentoEnum.concluida)
+        query = query.where(DemandaFSC.status_andamento != StatusAndamentoEnum.concluida)
 
     rows = db.execute(query).all()
     resultado: list[CronogramaGanttItem] = []

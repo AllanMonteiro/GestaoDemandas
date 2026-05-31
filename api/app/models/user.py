@@ -1,7 +1,8 @@
-﻿import enum
+import enum
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import DateTime, Enum, String, func
+from sqlalchemy import DateTime, Enum, String, func, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -12,6 +13,7 @@ class RoleEnum(str, enum.Enum):
     GESTOR = 'GESTOR'
     AUDITOR = 'AUDITOR'
     RESPONSAVEL = 'RESPONSAVEL'
+    SOLICITANTE = 'SOLICITANTE'
 
 
 class User(Base):
@@ -22,6 +24,13 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum, name='role_enum', native_enum=False), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    
+    # Technical improvements
+    needs_password_change: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
+    is_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     evidencias_criadas = relationship('Evidencia', back_populates='criador')
@@ -66,7 +75,8 @@ class User(Base):
         foreign_keys='AnaliseNaoConformidade.responsavel_id',
         back_populates='responsavel',
     )
-    demandas_responsavel = relationship('Demanda', back_populates='responsavel')
+    demandas_responsavel = relationship('Demanda', foreign_keys='Demanda.responsavel_id', back_populates='responsavel')
+    demandas_solicitante = relationship('Demanda', foreign_keys='Demanda.solicitante_id', back_populates='solicitante')
     projetos_criados = relationship(
         'Projeto',
         foreign_keys='Projeto.created_by',

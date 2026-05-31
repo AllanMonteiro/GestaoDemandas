@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
-import { api, ConfiguracaoSistema, Usuario } from '../api';
+import { api, AtividadeSetorConfig, ConfiguracaoSistema, getApiErrorMessage, Usuario } from '../api';
 
 type Props = {
   refreshConfiguracaoNoHeader: () => Promise<void>;
@@ -9,26 +9,41 @@ type Props = {
 export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
   const [configuracao, setConfiguracao] = useState<ConfiguracaoSistema | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [setoresAtividade, setSetoresAtividade] = useState<AtividadeSetorConfig[]>([]);
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [arquivoLogo, setArquivoLogo] = useState<File | null>(null);
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmacaoNovaSenha, setConfirmacaoNovaSenha] = useState('');
+  const [novoSetor, setNovoSetor] = useState({ nome: '', ordem: '0' });
+  const [novaSubatividade, setNovaSubatividade] = useState({ setor_id: '', nome: '', ordem: '0' });
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
+
+  const podeGerenciarCatalogo = usuario?.role === 'ADMIN' || usuario?.role === 'GESTOR';
+
+  const opcoesSetor = useMemo(
+    () =>
+      setoresAtividade
+        .slice()
+        .sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome)),
+    [setoresAtividade]
+  );
 
   const carregar = async () => {
     try {
       setErro('');
-      const [configResp, usuarioResp] = await Promise.all([
+      const [configResp, usuarioResp, setoresResp] = await Promise.all([
         api.get<ConfiguracaoSistema>('/configuracoes'),
         api.get<Usuario>('/auth/me'),
+        api.get<AtividadeSetorConfig[]>('/configuracoes/atividades-setores'),
       ]);
       setConfiguracao(configResp.data);
       setNomeEmpresa(configResp.data.nome_empresa);
       setUsuario(usuarioResp.data);
-    } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao carregar configuracoes.');
+      setSetoresAtividade(setoresResp.data);
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao carregar configuracoes.'));
     }
   };
 
@@ -45,8 +60,8 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
       await carregar();
       await refreshConfiguracaoNoHeader();
       setMensagem('Nome da empresa atualizado com sucesso.');
-    } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao atualizar nome da empresa.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao atualizar nome da empresa.'));
     }
   };
 
@@ -68,8 +83,8 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
       await carregar();
       await refreshConfiguracaoNoHeader();
       setMensagem('Logo da empresa atualizada com sucesso.');
-    } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao atualizar logo da empresa.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao atualizar logo da empresa.'));
     }
   };
 
@@ -81,8 +96,8 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
       await carregar();
       await refreshConfiguracaoNoHeader();
       setMensagem('Logo removida com sucesso.');
-    } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao remover logo.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao remover logo.'));
     }
   };
 
@@ -103,8 +118,102 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
       setNovaSenha('');
       setConfirmacaoNovaSenha('');
       setMensagem('Senha de login alterada com sucesso.');
-    } catch (err: any) {
-      setErro(err?.response?.data?.detail || 'Falha ao alterar senha.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao alterar senha.'));
+    }
+  };
+
+  const cadastrarSetor = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!podeGerenciarCatalogo) return;
+    try {
+      setErro('');
+      setMensagem('');
+      await api.post('/configuracoes/atividades-setores', {
+        nome: novoSetor.nome,
+        ordem: Number(novoSetor.ordem || 0),
+        ativo: true,
+      });
+      setNovoSetor({ nome: '', ordem: '0' });
+      await carregar();
+      setMensagem('Setor de atividade cadastrado com sucesso.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao cadastrar setor de atividade.'));
+    }
+  };
+
+  const cadastrarSubatividade = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!podeGerenciarCatalogo) return;
+    try {
+      setErro('');
+      setMensagem('');
+      await api.post('/configuracoes/atividades-subatividades', {
+        setor_id: Number(novaSubatividade.setor_id),
+        nome: novaSubatividade.nome,
+        ordem: Number(novaSubatividade.ordem || 0),
+        ativo: true,
+      });
+      setNovaSubatividade((prev) => ({ ...prev, nome: '', ordem: '0' }));
+      await carregar();
+      setMensagem('Subatividade cadastrada com sucesso.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao cadastrar subatividade.'));
+    }
+  };
+
+  const alternarSetor = async (setor: AtividadeSetorConfig) => {
+    if (!podeGerenciarCatalogo) return;
+    try {
+      setErro('');
+      setMensagem('');
+      await api.patch(`/configuracoes/atividades-setores/${setor.id}`, { ativo: !setor.ativo });
+      await carregar();
+      setMensagem(`Setor ${!setor.ativo ? 'ativado' : 'desativado'} com sucesso.`);
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao atualizar setor.'));
+    }
+  };
+
+  const alternarSubatividade = async (subatividadeId: number, ativo: boolean) => {
+    if (!podeGerenciarCatalogo) return;
+    try {
+      setErro('');
+      setMensagem('');
+      await api.patch(`/configuracoes/atividades-subatividades/${subatividadeId}`, { ativo: !ativo });
+      await carregar();
+      setMensagem(`Subatividade ${!ativo ? 'ativada' : 'desativada'} com sucesso.`);
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao atualizar subatividade.'));
+    }
+  };
+
+  const removerSetor = async (setorId: number) => {
+    if (!podeGerenciarCatalogo) return;
+    try {
+      setErro('');
+      setMensagem('');
+      await api.delete(`/configuracoes/atividades-setores/${setorId}`);
+      if (novaSubatividade.setor_id === String(setorId)) {
+        setNovaSubatividade({ setor_id: '', nome: '', ordem: '0' });
+      }
+      await carregar();
+      setMensagem('Setor removido com sucesso.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao remover setor.'));
+    }
+  };
+
+  const removerSubatividade = async (subatividadeId: number) => {
+    if (!podeGerenciarCatalogo) return;
+    try {
+      setErro('');
+      setMensagem('');
+      await api.delete(`/configuracoes/atividades-subatividades/${subatividadeId}`);
+      await carregar();
+      setMensagem('Subatividade removida com sucesso.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao remover subatividade.'));
     }
   };
 
@@ -157,6 +266,150 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
           <button type="button" onClick={removerLogo}>
             Remover Logo
           </button>
+        )}
+      </div>
+
+      <div className="card grid gap-12">
+        <div className="between">
+          <div>
+            <h3 style={{ marginBottom: 6 }}>Setores e Subatividades</h3>
+            <p className="muted-text" style={{ margin: 0 }}>
+              Cadastre aqui os setores e as atividades internas de cada setor para usar no modulo de projetos.
+            </p>
+          </div>
+        </div>
+
+        {podeGerenciarCatalogo ? (
+          <>
+            <div className="grid two-col gap-12">
+              <form className="card grid gap-12" onSubmit={cadastrarSetor}>
+                <h4 style={{ margin: 0 }}>Novo Setor</h4>
+                <label className="form-row">
+                  <span>Nome do setor</span>
+                  <input
+                    value={novoSetor.nome}
+                    onChange={(e) => setNovoSetor((prev) => ({ ...prev, nome: e.target.value }))}
+                    placeholder="Ex: Manejo Florestal"
+                    required
+                  />
+                </label>
+                <label className="form-row">
+                  <span>Ordem</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={novoSetor.ordem}
+                    onChange={(e) => setNovoSetor((prev) => ({ ...prev, ordem: e.target.value }))}
+                  />
+                </label>
+                <button type="submit">Cadastrar Setor</button>
+              </form>
+
+              <form className="card grid gap-12" onSubmit={cadastrarSubatividade}>
+                <h4 style={{ margin: 0 }}>Nova Subatividade</h4>
+                <label className="form-row">
+                  <span>Setor</span>
+                  <select
+                    value={novaSubatividade.setor_id}
+                    onChange={(e) => setNovaSubatividade((prev) => ({ ...prev, setor_id: e.target.value }))}
+                    required
+                  >
+                    <option value="">Selecione</option>
+                    {opcoesSetor.map((setor) => (
+                      <option key={setor.id} value={setor.id}>
+                        {setor.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="form-row">
+                  <span>Nome da subatividade</span>
+                  <input
+                    value={novaSubatividade.nome}
+                    onChange={(e) => setNovaSubatividade((prev) => ({ ...prev, nome: e.target.value }))}
+                    placeholder="Ex: Certificacao"
+                    required
+                  />
+                </label>
+                <label className="form-row">
+                  <span>Ordem</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={novaSubatividade.ordem}
+                    onChange={(e) => setNovaSubatividade((prev) => ({ ...prev, ordem: e.target.value }))}
+                  />
+                </label>
+                <button type="submit" disabled={!opcoesSetor.length}>
+                  Cadastrar Subatividade
+                </button>
+              </form>
+            </div>
+          </>
+        ) : (
+          <p className="muted-text">Apenas ADMIN e GESTOR podem manter esse catalogo.</p>
+        )}
+
+        {!setoresAtividade.length ? (
+          <div className="muted-text">Nenhum setor cadastrado ainda.</div>
+        ) : (
+          <div className="grid gap-12">
+            {opcoesSetor.map((setor) => (
+              <div key={setor.id} className="card grid gap-12">
+                <div className="between">
+                  <div>
+                    <strong>{setor.nome}</strong>
+                    <div className="muted-text">Ordem {setor.ordem} | {setor.ativo ? 'Ativo' : 'Inativo'}</div>
+                  </div>
+                  {podeGerenciarCatalogo && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button type="button" className="btn-secondary" onClick={() => void alternarSetor(setor)}>
+                        {setor.ativo ? 'Desativar' : 'Ativar'}
+                      </button>
+                      <button type="button" className="btn-danger" onClick={() => void removerSetor(setor.id)}>
+                        Remover
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {!setor.subatividades.length ? (
+                  <div className="muted-text">Sem subatividades cadastradas nesse setor.</div>
+                ) : (
+                  <div className="grid gap-8">
+                    {setor.subatividades.map((subatividade) => (
+                      <div key={subatividade.id} className="between" style={{ gap: 12 }}>
+                        <div>
+                          <strong>{subatividade.nome}</strong>
+                          <div className="muted-text">
+                            Ordem {subatividade.ordem} | {subatividade.ativo ? 'Ativa' : 'Inativa'}
+                          </div>
+                        </div>
+                        {podeGerenciarCatalogo && (
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              onClick={() => void alternarSubatividade(subatividade.id, subatividade.ativo)}
+                            >
+                              {subatividade.ativo ? 'Desativar' : 'Ativar'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-danger"
+                              onClick={() => void removerSubatividade(subatividade.id)}
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

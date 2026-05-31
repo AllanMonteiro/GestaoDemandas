@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {
@@ -284,7 +284,20 @@ export default function DetalheAvaliacao() {
               render: (e) => (e.tipo_evidencia_id ? tiposMap.get(e.tipo_evidencia_id) || e.tipo_evidencia_id : '-'),
             },
             { title: 'Formato', render: (e) => e.kind },
-            { title: 'URL/Caminho/Texto', render: (e) => e.url_or_path },
+            {
+              title: 'URL/Caminho/Texto',
+              render: (e) => {
+                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(e.url_or_path);
+                if (e.kind === 'arquivo' && isImage) {
+                  return (
+                    <a href={e.url_or_path} target="_blank" rel="noreferrer">
+                      <img src={e.url_or_path} alt="Evidência" className="report-img" />
+                    </a>
+                  );
+                }
+                return e.url_or_path;
+              },
+            },
             { title: 'Observações', render: (e) => e.observacoes || '-' },
             {
               title: 'Documentos',

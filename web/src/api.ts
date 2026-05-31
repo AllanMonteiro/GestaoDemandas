@@ -1,6 +1,6 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8002/api';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -14,7 +14,52 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export type Role = 'ADMIN' | 'GESTOR' | 'AUDITOR' | 'RESPONSAVEL';
+api.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  },
+);
+
+type ApiValidationDetailItem = {
+  loc?: Array<string | number>;
+  msg?: string;
+};
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (!axios.isAxiosError(error)) {
+    return fallback;
+  }
+
+  const detail = error.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item: ApiValidationDetailItem) => {
+        if (!item || typeof item !== 'object') return null;
+        const field = item.loc?.length ? String(item.loc[item.loc.length - 1]).replace(/_/g, ' ') : '';
+        const message = typeof item.msg === 'string' ? item.msg : '';
+        if (!field && !message) return null;
+        return field ? `${field}: ${message}` : message;
+      })
+      .filter((message): message is string => Boolean(message));
+
+    if (messages.length) {
+      return messages.join(' | ');
+    }
+  }
+
+  return fallback;
+}
+
+export type Role = 'ADMIN' | 'GESTOR' | 'AUDITOR' | 'RESPONSAVEL' | 'SOLICITANTE';
 
 export interface Usuario {
   id: number;
@@ -46,6 +91,26 @@ export interface ConfiguracaoSistema {
   updated_by?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AtividadeSubatividadeConfig {
+  id: number;
+  setor_id: number;
+  nome: string;
+  ativo: boolean;
+  ordem: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AtividadeSetorConfig {
+  id: number;
+  nome: string;
+  ativo: boolean;
+  ordem: number;
+  created_at: string;
+  updated_at: string;
+  subatividades: AtividadeSubatividadeConfig[];
 }
 
 export interface Auditoria {
@@ -272,6 +337,44 @@ export const STATUS_ANDAMENTO_LABELS: Record<StatusAndamento, string> = {
   concluida: 'Concluída',
   bloqueada: 'Bloqueada',
 };
+export type DemandaStatus =
+  | 'nova'
+  | 'em_triagem'
+  | 'aguardando_informacoes'
+  | 'aprovada'
+  | 'em_execucao'
+  | 'em_validacao'
+  | 'concluida'
+  | 'cancelada'
+  | 'backlog'
+  | 'a_fazer'
+  | 'em_andamento'
+  | 'em_revisao'
+  | 'bloqueada'
+  | 'triagem'
+  | 'aguardando_info'
+  | 'execucao'
+  | 'validacao';
+
+export const DEMANDA_STATUS_LABELS: Record<DemandaStatus, string> = {
+  nova: 'Nova',
+  em_triagem: 'Em Triagem',
+  aguardando_informacoes: 'Aguardando Informações',
+  aprovada: 'Aprovada',
+  em_execucao: 'Em Execução',
+  em_validacao: 'Em Validação',
+  concluida: 'Concluída',
+  cancelada: 'Cancelada',
+  backlog: 'Backlog',
+  a_fazer: 'A Fazer',
+  em_andamento: 'Em Andamento',
+  em_revisao: 'Em Revisão',
+  bloqueada: 'Bloqueada',
+  triagem: 'Triagem',
+  aguardando_info: 'Aguardando Info',
+  execucao: 'Execução',
+  validacao: 'Validação',
+};
 
 export type Prioridade = 'baixa' | 'media' | 'alta' | 'critica';
 
@@ -280,6 +383,13 @@ export const PRIORIDADE_LABELS: Record<Prioridade, string> = {
   media: 'Média',
   alta: 'Alta',
   critica: 'Crítica',
+};
+
+export const PRIORIDADE_COR: Record<Prioridade, string> = {
+  baixa: '#6b7280',
+  media: '#3b82f6',
+  alta: '#f59e0b',
+  critica: '#ef4444',
 };
 
 export interface Demanda {
@@ -389,22 +499,9 @@ export const PROJETO_STATUS_LABELS: Record<ProjetoStatus, string> = {
   cancelado: 'Cancelado',
 };
 
-export type TarefaProjetoStatus =
-  | 'backlog'
-  | 'a_fazer'
-  | 'em_andamento'
-  | 'em_revisao'
-  | 'concluida'
-  | 'bloqueada';
+export type TarefaProjetoStatus = DemandaStatus;
 
-export const TAREFA_PROJETO_STATUS_LABELS: Record<TarefaProjetoStatus, string> = {
-  backlog: 'Backlog',
-  a_fazer: 'A Fazer',
-  em_andamento: 'Em Andamento',
-  em_revisao: 'Em Revisao',
-  concluida: 'Concluida',
-  bloqueada: 'Bloqueada',
-};
+export const TAREFA_PROJETO_STATUS_LABELS: Record<TarefaProjetoStatus, string> = DEMANDA_STATUS_LABELS;
 
 export type AtividadeSubdemandaStatus = 'pendente' | 'concluida';
 
@@ -438,6 +535,9 @@ export interface TarefaProjeto {
   status: TarefaProjetoStatus;
   prioridade: Prioridade;
   responsavel_id?: number | null;
+  solicitante_id?: number | null;
+  setor?: string | null;
+  motivo_cancelamento?: string | null;
   start_date?: string | null;
   due_date?: string | null;
   completed_at?: string | null;
@@ -449,11 +549,26 @@ export interface TarefaProjeto {
   updated_at: string;
 }
 
+export type DemandaHistoricoTipo = 'comentario' | 'status' | 'anexo' | 'sistema';
+
+export interface DemandaHistorico {
+  id: number;
+  demanda_id: number;
+  tipo: DemandaHistoricoTipo;
+  conteudo: string;
+  old_status?: string | null;
+  new_status?: string | null;
+  created_by?: number | null;
+  created_at: string;
+}
+
 export interface AtividadeSubdemanda {
   id: number;
   tarefa_id: number;
   titulo: string;
   descricao?: string | null;
+  setor?: string | null;
+  subatividade?: string | null;
   status: AtividadeSubdemandaStatus;
   ordem: number;
   created_by: number;
@@ -480,3 +595,238 @@ export interface ProjetosDashboardResumo {
   projetos_por_status: ResumoProjetosStatusItem[];
   tarefas_por_status: ResumoTarefasStatusItem[];
 }
+
+// ── Gestão de Demandas (standalone) ──────────────────────────────────────────
+
+export type GestaoDemandasStatus = DemandaStatus;
+
+export const GESTAO_STATUS_LABELS: Record<GestaoDemandasStatus, string> = DEMANDA_STATUS_LABELS;
+
+export const GESTAO_STATUS_LIST: GestaoDemandasStatus[] = [
+  'nova',
+  'em_triagem',
+  'aguardando_informacoes',
+  'aprovada',
+  'em_execucao',
+  'em_validacao',
+  'concluida',
+  'cancelada',
+];
+
+export const GESTAO_STATUS_COR: Partial<Record<GestaoDemandasStatus, string>> = {
+  nova: '#6b7280',
+  em_triagem: '#3b82f6',
+  aguardando_informacoes: '#f59e0b',
+  aprovada: '#8b5cf6',
+  em_execucao: '#0ea5e9',
+  em_validacao: '#f97316',
+  concluida: '#22c55e',
+  cancelada: '#ef4444',
+};
+
+export interface GestaoDemanda {
+  id: number;
+  titulo: string;
+  descricao?: string | null;
+  solicitante_id?: number | null;
+  responsavel_id?: number | null;
+  setor?: string | null;
+  prioridade: Prioridade;
+  status: GestaoDemandasStatus;
+  prazo?: string | null;
+  data_abertura: string;
+  data_conclusao?: string | null;
+  motivo_cancelamento?: string | null;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProfissionalDemanda {
+  id: number;
+  codigo: string;
+  titulo: string;
+  descricao?: string | null;
+  solicitante_id?: number | null;
+  solicitante_nome?: string | null;
+  responsavel_id?: number | null;
+  responsavel_nome?: string | null;
+  parent_demanda_id?: number | null;
+  parent_titulo?: string | null;
+  setor?: string | null;
+  prioridade: Prioridade;
+  status: DemandaStatus;
+  prazo?: string | null;
+  data_abertura: string;
+  data_conclusao?: string | null;
+  motivo_cancelamento?: string | null;
+  criado_em: string;
+  atualizado_em: string;
+  subdemandas: ProfissionalDemandaListItem[];
+}
+
+export interface ProfissionalDemandaListItem {
+  id: number;
+  codigo: string;
+  titulo: string;
+  parent_demanda_id?: number | null;
+  solicitante_nome?: string | null;
+  responsavel_nome?: string | null;
+  prioridade: Prioridade;
+  status: DemandaStatus;
+  prazo?: string | null;
+  atraso?: number | null;
+  total_subdemandas?: number;
+}
+
+export type DemandaListItem = ProfissionalDemandaListItem;
+
+export interface DemandaComentario {
+  id: number;
+  demanda_id: number;
+  usuario_id: number | null;
+  usuario_nome?: string | null;
+  comentario: string;
+  criado_em: string;
+}
+
+export interface DemandaAnexo {
+  id: number;
+  demanda_id: number;
+  usuario_id: number | null;
+  usuario_nome?: string | null;
+  nome_arquivo: string;
+  content_type?: string | null;
+  tamanho?: number | null;
+  storage_key: string;
+  criado_em: string;
+  observacoes?: string | null;
+  file_url?: string;
+}
+
+export type DemandaAnaliseMetodo =
+  | '5_PORQUES'
+  | '4W2H'
+  | '5W2H'
+  | 'ISHIKAWA'
+  | 'GUT'
+  | 'ESFORCO_IMPACTO'
+  | 'PDCA';
+
+export const DEMANDA_ANALISE_METODO_LABELS: Record<DemandaAnaliseMetodo, string> = {
+  '5_PORQUES': '5 Porques',
+  '4W2H': '4W2H',
+  '5W2H': '5W2H',
+  ISHIKAWA: 'Ishikawa',
+  GUT: 'Matriz GUT',
+  ESFORCO_IMPACTO: 'Esforco x Impacto',
+  PDCA: 'PDCA',
+};
+
+export const DEMANDA_ANALISE_METODOS: DemandaAnaliseMetodo[] = [
+  '5_PORQUES',
+  '4W2H',
+  '5W2H',
+  'ISHIKAWA',
+  'GUT',
+  'ESFORCO_IMPACTO',
+  'PDCA',
+];
+
+export type DemandaAnaliseStatus = 'rascunho' | 'em_analise' | 'plano_definido' | 'em_execucao' | 'concluido' | 'cancelado';
+
+export const DEMANDA_ANALISE_STATUS_LABELS: Record<DemandaAnaliseStatus, string> = {
+  rascunho: 'Rascunho',
+  em_analise: 'Em Analise',
+  plano_definido: 'Plano Definido',
+  em_execucao: 'Em Execucao',
+  concluido: 'Concluido',
+  cancelado: 'Cancelado',
+};
+
+export const DEMANDA_ANALISE_STATUS_LIST: DemandaAnaliseStatus[] = [
+  'rascunho',
+  'em_analise',
+  'plano_definido',
+  'em_execucao',
+  'concluido',
+  'cancelado',
+];
+
+export interface DemandaAnaliseCampo {
+  id: number;
+  analise_id: number;
+  chave: string;
+  valor?: string | null;
+  ordem: number;
+}
+
+export interface DemandaAnalise {
+  id: number;
+  demanda_id: number;
+  metodo: DemandaAnaliseMetodo;
+  problema?: string | null;
+  causa_raiz?: string | null;
+  status: DemandaAnaliseStatus;
+  responsavel_id?: number | null;
+  responsavel_nome?: string | null;
+  criado_em: string;
+  atualizado_em: string;
+  campos: DemandaAnaliseCampo[];
+  campos_map: Record<string, string | null>;
+  pontuacao_total?: number | null;
+  classificacao?: string | null;
+}
+
+export interface ItemContagem {
+  label: string;
+  valor: number;
+}
+
+export interface ItemContagemPct {
+  label: string;
+  valor: number;
+  pct: number;
+}
+
+export interface GestaoDashboard {
+  total_abertas: number;
+  total_atrasadas: number;
+  total_concluidas_mes: number;
+  total_canceladas: number;
+  tempo_medio_atendimento_dias: number | null;
+  sla_no_prazo: number;
+  sla_vencido: number;
+  por_status: ItemContagemPct[];
+  por_prioridade: ItemContagemPct[];
+  por_setor: ItemContagem[];
+  por_responsavel: ItemContagem[];
+  total_por_status: ItemContagemPct[];
+  total_por_prioridade: ItemContagemPct[];
+  total_por_responsavel: ItemContagem[];
+  tempo_medio_conclusao: number | null;
+  sla_cumprido_percentual: number;
+}
+
+export type DemandaTipoEvento = 'criado' | 'comentario' | 'status_alterado' | 'campo_alterado';
+
+export interface DemandaEvento {
+  id: number;
+  demanda_id: number;
+  usuario_id: number | null;
+  tipo_evento: DemandaTipoEvento | string;
+  campo_alterado: string | null;
+  valor_anterior: string | null;
+  valor_novo: string | null;
+  usuario_nome: string | null;
+  criado_em: string;
+}
+
+export interface HomeData {
+  resumo: GestaoDashboard;
+  atrasadas: DemandaListItem[];
+  minhas_demandas: DemandaListItem[];
+  recentes: DemandaListItem[];
+}
+
+export const fetchHome = () => api.get<HomeData>('/gestao-demandas/dashboard/home').then((r) => r.data);

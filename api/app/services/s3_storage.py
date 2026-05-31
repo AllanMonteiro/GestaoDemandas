@@ -1,10 +1,28 @@
-﻿from botocore.client import Config
+﻿from pathlib import Path
+
+from botocore.client import Config
 import boto3
 from botocore.exceptions import ClientError
 
 from app.core.config import get_settings
 
 settings = get_settings()
+
+
+def validate_upload(filename: str, size_bytes: int, content_type: str | None = None) -> None:
+    """Valida extensão e tamanho de arquivo antes do upload. Lança ValueError se inválido."""
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if size_bytes > max_bytes:
+        raise ValueError(
+            f"Arquivo excede o tamanho máximo permitido de {settings.MAX_UPLOAD_SIZE_MB} MB."
+        )
+
+    ext = Path(filename).suffix.lstrip('.').lower()
+    if ext not in settings.allowed_extensions_set():
+        raise ValueError(
+            f"Extensão '.{ext}' não é permitida. "
+            f"Use: {', '.join(sorted(settings.allowed_extensions_set()))}."
+        )
 
 
 def get_s3_client():

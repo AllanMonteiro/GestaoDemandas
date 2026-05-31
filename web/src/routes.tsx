@@ -1,10 +1,16 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import Configuracoes from './pages/Configuracoes';
+import Home from './pages/Home';
+import DemandasList from './pages/DemandasList';
+import DemandaForm from './pages/DemandaForm';
+import DemandaDetail from './pages/DemandaDetail';
+import DemandasDashboard from './pages/DemandasDashboard';
+import DemandasKanban from './pages/DemandasKanban';
 import Direcionadores from './pages/Direcionadores';
 import Login from './pages/Login';
 import Projetos from './pages/Projetos';
-import ProjetosDashboard from './pages/ProjetosDashboard';
+import { NotFound, Forbidden } from './pages/ErrorPages';
 
 type Props = {
   token: string | null;
@@ -31,20 +37,61 @@ export default function AppRoutes({ token, onLogin, refreshConfiguracaoNoHeader 
         path="/"
         element={
           <ProtectedRoute token={token}>
-            <ProjetosDashboard />
+            <Home />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Demandas Module */}
+      <Route
+        path="/demandas"
+        element={
+          <ProtectedRoute token={token}>
+            <DemandasList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/demandas/nova"
+        element={
+          <ProtectedRoute token={token}>
+            <DemandaForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/demandas/:id"
+        element={
+          <ProtectedRoute token={token}>
+            <DemandaDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/demandas/:id/editar"
+        element={
+          <ProtectedRoute token={token}>
+            <DemandaForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/demandas-dashboard"
+        element={
+          <ProtectedRoute token={token}>
+            <DemandasDashboard />
           </ProtectedRoute>
         }
       />
 
       <Route
-        path="/demandas"
+        path="/projetos"
         element={
           <ProtectedRoute token={token}>
             <Projetos />
           </ProtectedRoute>
         }
       />
-
       <Route
         path="/direcionadores"
         element={
@@ -53,8 +100,6 @@ export default function AppRoutes({ token, onLogin, refreshConfiguracaoNoHeader 
           </ProtectedRoute>
         }
       />
-
-      <Route path="/projetos" element={<Navigate to="/demandas" replace />} />
 
       <Route
         path="/configuracoes"
@@ -65,7 +110,16 @@ export default function AppRoutes({ token, onLogin, refreshConfiguracaoNoHeader 
         }
       />
 
-      <Route path="*" element={<Navigate to={token ? '/' : '/login'} replace />} />
+      <Route
+        path="/demandas-kanban"
+        element={
+          <ProtectedRoute token={token}>
+            <DemandasKanban />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/403" element={<Forbidden />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

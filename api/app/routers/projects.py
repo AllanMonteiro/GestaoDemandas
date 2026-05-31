@@ -2,25 +2,36 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.rbac import require_roles
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.project import (
+    AtividadeSetorConfig,
     AtividadeStatusEnum,
+    AtividadeSubatividadeConfig,
     AtividadeSubdemanda,
     Projeto,
     ProjetoPrioridadeEnum,
     ProjetoStatusEnum,
     TarefaProjeto,
     TarefaStatusEnum,
+    DemandaHistorico,
+    DemandaHistoricoTipoEnum,
 )
 from app.models.user import RoleEnum, User
 from app.schemas.fsc import MensagemOut
 from app.schemas.project import (
     PROJETO_STATUS_LABELS,
     TAREFA_STATUS_LABELS,
+    AtividadeSetorConfigCreate,
+    AtividadeSetorConfigOut,
+    AtividadeSetorConfigUpdate,
+    AtividadeSubatividadeConfigCreate,
+    AtividadeSubatividadeConfigOut,
+    AtividadeSubatividadeConfigUpdate,
     AtividadeSubdemandaCreate,
     AtividadeSubdemandaOut,
     AtividadeSubdemandaStatusPatch,
@@ -36,6 +47,8 @@ from app.schemas.project import (
     TarefaProjetoOut,
     TarefaProjetoStatusPatch,
     TarefaProjetoUpdate,
+    DemandaHistoricoCreate,
+    DemandaHistoricoOut,
 )
 
 router = APIRouter(prefix='/api', tags=['Projetos'])
@@ -67,6 +80,45 @@ def _buscar_atividade(db: Session, atividade_id: int) -> AtividadeSubdemanda:
     if not atividade:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Atividade nao encontrada.')
     return atividade
+
+
+def _buscar_setor_atividade_config(db: Session, setor_id: int) -> AtividadeSetorConfig:
+    setor = db.get(AtividadeSetorConfig, setor_id)
+    if not setor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Setor de atividade nao encontrado.')
+    return setor
+
+
+def _buscar_subatividade_config(db: Session, subatividade_id: int) -> AtividadeSubatividadeConfig:
+    subatividade = db.get(AtividadeSubatividadeConfig, subatividade_id)
+    if not subatividade:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subatividade nao encontrada.')
+    return subatividade
+
+
+def _normalizar_nome_catalogo(valor: str | None) -> str | None:
+    if valor is None:
+        return None
+    texto = valor.strip()
+    return texto or None
+
+
+def _nome_catalogo_obrigatorio(valor: str | None, campo: str) -> str:
+    nome = _normalizar_nome_catalogo(valor)
+    if not nome:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Informe um nome valido para {campo}.')
+    return nome
+
+
+def _validar_classificacao_atividade(setor: str | None, subatividade: str | None) -> tuple[str | None, str | None]:
+    setor_normalizado = _normalizar_nome_catalogo(setor)
+    subatividade_normalizada = _normalizar_nome_catalogo(subatividade)
+    if subatividade_normalizada and not setor_normalizado:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Informe o setor antes de definir a subatividade.',
+        )
+    return setor_normalizado, subatividade_normalizada
 
 
 def _validar_datas(data_inicio: date | None, data_fim: date | None, contexto: str) -> None:
@@ -144,7 +196,7 @@ def _normalizar_datas_tarefa(data: dict, tarefa: TarefaProjeto | None = None) ->
     data_inicio = data.get('start_date', tarefa.start_date if tarefa else None)
     data_fim = data.get('due_date', tarefa.due_date if tarefa else None)
     data_conclusao = data.get('completed_at', tarefa.completed_at if tarefa else None)
-    status_tarefa = data.get('status', tarefa.status if tarefa else TarefaStatusEnum.backlog)
+    status_tarefa = data.get('status', tarefa.status if tarefa else TarefaStatusEnum.nova)
 
     _validar_datas(data_inicio, data_fim, 'tarefa')
     _validar_datas(data_inicio, data_conclusao, 'tarefa')
@@ -161,6 +213,161 @@ def _projetos_visiveis_query(current_user: User):
         subquery_tarefas = select(TarefaProjeto.projeto_id).where(TarefaProjeto.responsavel_id == current_user.id)
         query = query.where(or_(Projeto.gerente_id == current_user.id, Projeto.id.in_(subquery_tarefas)))
     return query
+
+
+@router.get('/configuracoes/atividades-setores', response_model=list[AtividadeSetorConfigOut])
+def listar_setores_atividade_config(
+    ativos_apenas: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> list[AtividadeSetorConfigOut]:
+    query = (
+        select(AtividadeSetorConfig)
+        .options(selectinload(AtividadeSetorConfig.subatividades))
+        .order_by(AtividadeSetorConfig.ordem.asc(), AtividadeSetorConfig.nome.asc())
+    )
+    if ativos_apenas:
+        query = query.where(AtividadeSetorConfig.ativo.is_(True))
+
+    setores = list(db.scalars(query).all())
+    if ativos_apenas:
+        for setor in setores:
+            setor.subatividades = [
+                subatividade
+                for subatividade in setor.subatividades
+                if subatividade.ativo
+            ]
+    else:
+        for setor in setores:
+            setor.subatividades = sorted(
+                setor.subatividades,
+                key=lambda item: (item.ordem, item.nome.lower()),
+            )
+    return setores
+
+
+@router.post('/configuracoes/atividades-setores', response_model=AtividadeSetorConfigOut, status_code=status.HTTP_201_CREATED)
+def criar_setor_atividade_config(
+    payload: AtividadeSetorConfigCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR)),
+) -> AtividadeSetorConfigOut:
+    setor = AtividadeSetorConfig(
+        nome=_nome_catalogo_obrigatorio(payload.nome, 'o setor'),
+        ativo=payload.ativo,
+        ordem=payload.ordem,
+    )
+    db.add(setor)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Ja existe um setor com este nome.') from None
+    db.refresh(setor)
+    return setor
+
+
+@router.patch('/configuracoes/atividades-setores/{setor_id}', response_model=AtividadeSetorConfigOut)
+def atualizar_setor_atividade_config(
+    setor_id: int,
+    payload: AtividadeSetorConfigUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR)),
+) -> AtividadeSetorConfigOut:
+    setor = _buscar_setor_atividade_config(db, setor_id)
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Nenhum campo informado para atualizacao.')
+    if 'nome' in data and data['nome'] is not None:
+        data['nome'] = _nome_catalogo_obrigatorio(data['nome'], 'o setor')
+    for field, value in data.items():
+        setattr(setor, field, value)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Ja existe um setor com este nome.') from None
+    db.refresh(setor)
+    return setor
+
+
+@router.delete('/configuracoes/atividades-setores/{setor_id}', response_model=MensagemOut)
+def remover_setor_atividade_config(
+    setor_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR)),
+) -> MensagemOut:
+    setor = _buscar_setor_atividade_config(db, setor_id)
+    db.delete(setor)
+    db.commit()
+    return MensagemOut(mensagem='Setor removido com sucesso.')
+
+
+@router.post('/configuracoes/atividades-subatividades', response_model=AtividadeSubatividadeConfigOut, status_code=status.HTTP_201_CREATED)
+def criar_subatividade_config(
+    payload: AtividadeSubatividadeConfigCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR)),
+) -> AtividadeSubatividadeConfigOut:
+    _buscar_setor_atividade_config(db, payload.setor_id)
+    subatividade = AtividadeSubatividadeConfig(
+        setor_id=payload.setor_id,
+        nome=_nome_catalogo_obrigatorio(payload.nome, 'a subatividade'),
+        ativo=payload.ativo,
+        ordem=payload.ordem,
+    )
+    db.add(subatividade)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Ja existe uma subatividade com este nome dentro do setor selecionado.',
+        ) from None
+    db.refresh(subatividade)
+    return subatividade
+
+
+@router.patch('/configuracoes/atividades-subatividades/{subatividade_id}', response_model=AtividadeSubatividadeConfigOut)
+def atualizar_subatividade_config(
+    subatividade_id: int,
+    payload: AtividadeSubatividadeConfigUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR)),
+) -> AtividadeSubatividadeConfigOut:
+    subatividade = _buscar_subatividade_config(db, subatividade_id)
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Nenhum campo informado para atualizacao.')
+    if 'setor_id' in data and data['setor_id'] is not None:
+        _buscar_setor_atividade_config(db, data['setor_id'])
+    if 'nome' in data and data['nome'] is not None:
+        data['nome'] = _nome_catalogo_obrigatorio(data['nome'], 'a subatividade')
+    for field, value in data.items():
+        setattr(subatividade, field, value)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Ja existe uma subatividade com este nome dentro do setor selecionado.',
+        ) from None
+    db.refresh(subatividade)
+    return subatividade
+
+
+@router.delete('/configuracoes/atividades-subatividades/{subatividade_id}', response_model=MensagemOut)
+def remover_subatividade_config(
+    subatividade_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(RoleEnum.ADMIN, RoleEnum.GESTOR)),
+) -> MensagemOut:
+    subatividade = _buscar_subatividade_config(db, subatividade_id)
+    db.delete(subatividade)
+    db.commit()
+    return MensagemOut(mensagem='Subatividade removida com sucesso.')
 
 
 @router.get('/projetos', response_model=list[ProjetoOut])
@@ -327,6 +534,18 @@ def criar_tarefa_projeto(
         created_by=current_user.id,
     )
     db.add(tarefa)
+    db.flush()  # Para ter o ID da tarefa
+
+    # Log inicial no historico
+    historico = DemandaHistorico(
+        demanda_id=tarefa.id,
+        tipo=DemandaHistoricoTipoEnum.sistema,
+        conteudo='Demanda criada.',
+        new_status=tarefa.status,
+        created_by=current_user.id,
+    )
+    db.add(historico)
+
     db.commit()
     db.refresh(tarefa)
     return tarefa
@@ -363,8 +582,21 @@ def atualizar_tarefa(
         _buscar_usuario(db, data['responsavel_id'])
     _normalizar_datas_tarefa(data, tarefa)
 
+    old_status = tarefa.status
     for field, value in data.items():
         setattr(tarefa, field, value)
+
+    # Log se mudou status
+    if 'status' in data and data['status'] != old_status:
+        historico = DemandaHistorico(
+            demanda_id=tarefa.id,
+            tipo=DemandaHistoricoTipoEnum.status,
+            conteudo=f'Status alterado de "{TAREFA_STATUS_LABELS[old_status]}" para "{TAREFA_STATUS_LABELS[data["status"]]}".',
+            old_status=old_status,
+            new_status=data['status'],
+            created_by=current_user.id,
+        )
+        db.add(historico)
 
     db.commit()
     db.refresh(tarefa)
@@ -389,9 +621,23 @@ def atualizar_status_tarefa(
 
     data = {'status': payload.status}
     _normalizar_datas_tarefa(data, tarefa)
+    old_status = tarefa.status
     tarefa.status = payload.status
     if 'completed_at' in data:
         tarefa.completed_at = data['completed_at']
+
+    # Log no historico
+    if payload.status != old_status:
+        historico = DemandaHistorico(
+            demanda_id=tarefa.id,
+            tipo=DemandaHistoricoTipoEnum.status,
+            conteudo=f'Status alterado de "{TAREFA_STATUS_LABELS[old_status]}" para "{TAREFA_STATUS_LABELS[payload.status]}".',
+            old_status=old_status,
+            new_status=payload.status,
+            created_by=current_user.id,
+        )
+        db.add(historico)
+
     db.commit()
     db.refresh(tarefa)
     return tarefa
@@ -435,9 +681,14 @@ def criar_atividade_subdemanda(
 ) -> AtividadeSubdemandaOut:
     tarefa = _buscar_tarefa(db, tarefa_id)
     _validar_gestao_atividade(tarefa, current_user)
+    data = payload.model_dump()
+    data['setor'], data['subatividade'] = _validar_classificacao_atividade(
+        data.get('setor'),
+        data.get('subatividade'),
+    )
 
     atividade = AtividadeSubdemanda(
-        **payload.model_dump(),
+        **data,
         tarefa_id=tarefa_id,
         created_by=current_user.id,
     )
@@ -474,6 +725,11 @@ def atualizar_atividade_subdemanda(
             )
     else:
         _validar_gestao_atividade(tarefa, current_user)
+
+    if 'setor' in data or 'subatividade' in data:
+        setor_valor = data['setor'] if 'setor' in data else atividade.setor
+        subatividade_valor = data['subatividade'] if 'subatividade' in data else atividade.subatividade
+        data['setor'], data['subatividade'] = _validar_classificacao_atividade(setor_valor, subatividade_valor)
 
     for field, value in data.items():
         setattr(atividade, field, value)
@@ -549,7 +805,9 @@ def resumo_dashboard_projetos(
         query_tarefas = query_tarefas.where(TarefaProjeto.responsavel_id == current_user.id)
     tarefas = list(db.scalars(query_tarefas).all())
     tarefas_atrasadas = sum(
-        1 for tarefa in tarefas if tarefa.due_date and tarefa.due_date < date.today() and tarefa.status != TarefaStatusEnum.concluida
+        1
+        for tarefa in tarefas
+        if tarefa.due_date and tarefa.due_date < date.today() and tarefa.status != TarefaStatusEnum.concluida
     )
 
     projetos_por_status_map = {status_item: 0 for status_item in ProjetoStatusEnum}
@@ -581,3 +839,37 @@ def resumo_dashboard_projetos(
             for status_item in TarefaStatusEnum
         ],
     )
+
+
+@router.get('/tarefas/{tarefa_id}/historico', response_model=list[DemandaHistoricoOut])
+def listar_historico_demanda(
+    tarefa_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[DemandaHistoricoOut]:
+    tarefa = _buscar_tarefa(db, tarefa_id)
+    _validar_acesso_tarefa(tarefa, current_user)
+    
+    query = select(DemandaHistorico).where(DemandaHistorico.demanda_id == tarefa_id).order_by(DemandaHistorico.created_at.desc())
+    return list(db.scalars(query).all())
+
+
+@router.post('/tarefas/{tarefa_id}/historico', response_model=DemandaHistoricoOut, status_code=status.HTTP_201_CREATED)
+def adicionar_historico_demanda(
+    tarefa_id: int,
+    payload: DemandaHistoricoCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DemandaHistoricoOut:
+    tarefa = _buscar_tarefa(db, tarefa_id)
+    _validar_acesso_tarefa(tarefa, current_user)
+    
+    historico = DemandaHistorico(
+        **payload.model_dump(),
+        demanda_id=tarefa_id,
+        created_by=current_user.id
+    )
+    db.add(historico)
+    db.commit()
+    db.refresh(historico)
+    return historico

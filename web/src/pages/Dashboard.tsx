@@ -1,315 +1,317 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 
-import {
-  api,
-  Auditoria,
-  Demanda,
-  MonitoramentoMensalItem,
-  ProgramaCertificacao,
-  ResumoConformidadeCertificacaoItem,
-  ResumoStatusItem,
-  STATUS_ANDAMENTO_LABELS,
-  STATUS_CONFORMIDADE_LABELS,
-  StatusConformidade,
-} from '../api';
-import Table from '../components/Table';
+import { api, GestaoDashboard, GestaoDemandasStatus, GESTAO_STATUS_COR, ItemContagem, ItemContagemPct } from '../api';
 
-type Props = {
-  programaId: number | null;
-  auditoriaId: number | null;
-  selecionarContextoRelatorio: (programaId: number, year: number) => Promise<void>;
+const PRIORIDADE_COR: Record<string, string> = {
+  Baixa: '#6b7280',
+  Média: '#3b82f6',
+  Alta: '#f59e0b',
+  Crítica: '#ef4444',
 };
 
-const ORDEM_STATUS: StatusConformidade[] = [
-  'conforme',
-  'nc_menor',
-  'nc_maior',
-  'oportunidade_melhoria',
-  'nao_se_aplica',
-];
-
-const CLASSE_RISCO_STATUS: Record<StatusConformidade, string> = {
-  conforme: 'status-risco-baixo',
-  nc_menor: 'status-risco-medio',
-  nc_maior: 'status-risco-alto',
-  oportunidade_melhoria: 'status-risco-atencao',
-  nao_se_aplica: 'status-risco-neutro',
+const STATUS_LABEL_TO_KEY: Record<string, GestaoDemandasStatus> = {
+  Nova: 'nova',
+  'Em Triagem': 'triagem',
+  'Aguardando Informações': 'aguardando_info',
+  Aprovada: 'aprovada',
+  'Em Execução': 'execucao',
+  'Em Validação': 'validacao',
+  Concluída: 'concluida',
+  Cancelada: 'cancelada',
 };
 
-type FiltroConformidadeDemandas =
-  | 'conforme'
-  | 'nao_conformes'
-  | 'oportunidade_melhoria'
-  | 'nao_se_aplica';
-
-export default function Dashboard({
-  programaId,
-  auditoriaId,
-  selecionarContextoRelatorio,
-}: Props) {
-  const navigate = useNavigate();
-  const [resumo, setResumo] = useState<ResumoStatusItem[]>([]);
-  const [demandasAtrasadas, setDemandasAtrasadas] = useState<Demanda[]>([]);
-  const [monitoramentoMensal, setMonitoramentoMensal] = useState<MonitoramentoMensalItem[]>([]);
-  const [resumoCertificacaoAno, setResumoCertificacaoAno] = useState<ResumoConformidadeCertificacaoItem[]>([]);
-  const [programas, setProgramas] = useState<ProgramaCertificacao[]>([]);
-  const [anosDisponiveis, setAnosDisponiveis] = useState<number[]>([]);
-  const [anoRelatorio, setAnoRelatorio] = useState<number>(new Date().getFullYear());
-  const [programaRelatorio, setProgramaRelatorio] = useState<string>('');
-  const [erro, setErro] = useState('');
-
-  useEffect(() => {
-    const carregarFiltros = async () => {
-      try {
-        const [programasResp, auditoriasResp] = await Promise.all([
-          api.get<ProgramaCertificacao[]>('/programas-certificacao'),
-          api.get<Auditoria[]>('/auditorias'),
-        ]);
-        setProgramas(programasResp.data);
-        const anos = Array.from(new Set(auditoriasResp.data.map((a) => a.year))).sort((a, b) => b - a);
-        setAnosDisponiveis(anos);
-        if (anos.length > 0 && !anos.includes(anoRelatorio)) {
-          setAnoRelatorio(anos[0]);
-        }
-      } catch {
-        // Erros detalhados serao exibidos nos carregamentos principais.
-      }
-    };
-    void carregarFiltros();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!auditoriaId || !programaId) {
-      setMonitoramentoMensal([]);
-      return;
-    }
-    const carregarResumoAuditoria = async () => {
-      try {
-        setErro('');
-        const [resumoResp, demandasResp] = await Promise.all([
-          api.get<ResumoStatusItem[]>('/reports/resumo-status', { params: { auditoria_id: auditoriaId } }),
-          api.get<Demanda[]>('/reports/demandas-atrasadas', { params: { auditoria_id: auditoriaId } }),
-        ]);
-        setResumo(resumoResp.data);
-        setDemandasAtrasadas(demandasResp.data);
-        try {
-          const monitoramentoResp = await api.get<MonitoramentoMensalItem[]>('/reports/monitoramento-mensal', {
-            params: { programa_id: programaId, auditoria_id: auditoriaId },
-          });
-          setMonitoramentoMensal(monitoramentoResp.data);
-        } catch (err: any) {
-          if (err?.response?.status === 404) {
-            // Ambientes com API antiga podem não ter este relatório.
-            setMonitoramentoMensal([]);
-          } else {
-            setErro(err?.response?.data?.detail || 'Falha ao carregar monitoramento mensal.');
-          }
-        }
-      } catch (err: any) {
-        setErro(err?.response?.data?.detail || 'Falha ao carregar dashboard.');
-      }
-    };
-    void carregarResumoAuditoria();
-  }, [auditoriaId, programaId]);
-
-  useEffect(() => {
-    if (!anoRelatorio) return;
-    const carregarResumoCertificacaoAno = async () => {
-      try {
-        setErro('');
-        const params: Record<string, string | number> = { year: anoRelatorio };
-        if (programaRelatorio) {
-          params.programa_id = Number(programaRelatorio);
-        }
-        const { data } = await api.get<ResumoConformidadeCertificacaoItem[]>(
-          '/reports/resumo-conformidade-por-certificacao',
-          { params }
-        );
-        setResumoCertificacaoAno(data);
-      } catch (err: any) {
-        setErro(err?.response?.data?.detail || 'Falha ao carregar relatorio por certificacao.');
-      }
-    };
-    void carregarResumoCertificacaoAno();
-  }, [anoRelatorio, programaRelatorio]);
-
-  const resumoMap = useMemo(
-    () => new Map(resumo.map((item) => [item.status_conformidade, item.quantidade])),
-    [resumo]
+function KpiCard({
+  titulo,
+  valor,
+  unidade,
+  cor,
+  destaque,
+}: {
+  titulo: string;
+  valor: string | number;
+  unidade?: string;
+  cor: string;
+  destaque?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderTop: `4px solid ${cor}`,
+        borderRadius: 8,
+        padding: '16px 20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+      }}
+    >
+      <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        {titulo}
+      </div>
+      <div style={{ fontSize: destaque ? 36 : 28, fontWeight: 700, color: cor, lineHeight: 1.1 }}>
+        {valor}
+        {unidade && (
+          <span style={{ fontSize: 14, fontWeight: 400, color: '#6b7280', marginLeft: 4 }}>{unidade}</span>
+        )}
+      </div>
+    </div>
   );
+}
 
-  const abrirDemandasPorRelatorio = async (
-    item: ResumoConformidadeCertificacaoItem,
-    filtroConformidade: FiltroConformidadeDemandas
-  ) => {
+function BarraHorizontal({
+  label,
+  valor,
+  pct,
+  cor,
+  total,
+}: {
+  label: string;
+  valor: number;
+  pct?: number;
+  cor: string;
+  total?: number;
+}) {
+  const largura = pct ?? (total && total > 0 ? (valor / total) * 100 : 0);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+      <div
+        style={{
+          width: 148,
+          flexShrink: 0,
+          color: '#374151',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={label}
+      >
+        {label}
+      </div>
+      <div style={{ flex: 1, background: '#f3f4f6', borderRadius: 4, height: 14, overflow: 'hidden' }}>
+        <div
+          style={{
+            width: `${largura > 0 ? Math.max(largura, 2) : 0}%`,
+            height: '100%',
+            background: cor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease',
+          }}
+        />
+      </div>
+      <div style={{ width: 60, textAlign: 'right', color: '#374151', fontWeight: 600, flexShrink: 0 }}>
+        {valor}
+        {pct !== undefined && (
+          <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400, marginLeft: 3 }}>{pct}%</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PainelBarras({
+  titulo,
+  itens,
+  corFn,
+}: {
+  titulo: string;
+  itens: (ItemContagem | ItemContagemPct)[];
+  corFn: (label: string) => string;
+}) {
+  const total = itens.reduce((s, i) => s + i.valor, 0);
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: '#374151' }}>{titulo}</h4>
+      {itens.length === 0 ? (
+        <div style={{ fontSize: 13, color: '#9ca3af' }}>Sem dados.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {itens.map((item) => (
+            <BarraHorizontal
+              key={item.label}
+              label={item.label}
+              valor={item.valor}
+              pct={'pct' in item ? item.pct : undefined}
+              cor={corFn(item.label)}
+              total={total}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SlaGauge({ noPrazo, vencido }: { noPrazo: number; vencido: number }) {
+  const total = noPrazo + vencido;
+  if (total === 0) {
+    return (
+      <div className="card" style={{ padding: 16 }}>
+        <h4 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+          SLA — Cumprimento de Prazo
+        </h4>
+        <div style={{ fontSize: 13, color: '#9ca3af' }}>Nenhuma demanda com prazo definido ainda.</div>
+      </div>
+    );
+  }
+  const pctOk = Math.round((noPrazo / total) * 100);
+  const pctVenc = 100 - pctOk;
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+        SLA — Cumprimento de Prazo
+      </h4>
+      <div style={{ height: 20, borderRadius: 6, overflow: 'hidden', display: 'flex', marginBottom: 12 }}>
+        <div style={{ width: `${pctOk}%`, background: '#22c55e', transition: 'width 0.4s' }} />
+        <div style={{ width: `${pctVenc}%`, background: '#ef4444', transition: 'width 0.4s' }} />
+      </div>
+      <div style={{ display: 'flex', gap: 28, fontSize: 13 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 12, height: 12, borderRadius: 2, background: '#22c55e', flexShrink: 0 }} />
+          <span>
+            No prazo: <strong>{noPrazo}</strong>
+            <span style={{ color: '#6b7280', marginLeft: 4 }}>({pctOk}%)</span>
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 12, height: 12, borderRadius: 2, background: '#ef4444', flexShrink: 0 }} />
+          <span>
+            Vencido: <strong>{vencido}</strong>
+            <span style={{ color: '#6b7280', marginLeft: 4 }}>({pctVenc}%)</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const [dados, setDados] = useState<GestaoDashboard | null>(null);
+  const [erro, setErro] = useState('');
+  const [carregando, setCarregando] = useState(true);
+
+  const carregar = async () => {
+    setCarregando(true);
+    setErro('');
     try {
-      setErro('');
-      await selecionarContextoRelatorio(item.programa_id, item.year);
-      navigate(`/demandas?filtro_conformidade=${filtroConformidade}`);
-    } catch {
-      setErro('Nao foi possivel abrir as demandas para o filtro selecionado.');
+      const { data } = await api.get<GestaoDashboard>('/gestao-demandas/dashboard/resumo');
+      setDados(data);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      setErro(e?.response?.data?.detail || 'Falha ao carregar dashboard.');
+    } finally {
+      setCarregando(false);
     }
   };
 
+  useEffect(() => {
+    void carregar();
+  }, []);
+
+  const mesAtual = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+
+  const gargalo = dados?.por_status.find(
+    (s) => !['Concluída', 'Cancelada'].includes(s.label) && s.pct > 40
+  );
+
   return (
     <div className="grid gap-16">
-      <h2>Dashboard da Auditoria</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Dashboard Gerencial</h2>
+        <button type="button" className="btn-secondary" onClick={() => void carregar()} disabled={carregando}>
+          {carregando ? 'Atualizando...' : 'Atualizar'}
+        </button>
+      </div>
 
       {erro && <div className="error">{erro}</div>}
 
-      {!auditoriaId && (
-        <div className="card">Selecione Programa e Auditoria (Ano) no topo para visualizar o resumo operacional.</div>
+      {carregando && !dados && (
+        <div className="card" style={{ textAlign: 'center', color: '#6b7280', padding: 32 }}>
+          Carregando indicadores...
+        </div>
       )}
 
-      {auditoriaId && (
+      {dados && (
         <>
-          <div className="cards-status">
-            {ORDEM_STATUS.map((status) => (
-              <div className={`card status-card ${CLASSE_RISCO_STATUS[status]}`} key={status}>
-                <h3>{STATUS_CONFORMIDADE_LABELS[status]}</h3>
-                <strong>{resumoMap.get(status) || 0}</strong>
-              </div>
-            ))}
+          {/* KPIs principais */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 12 }}>
+            <KpiCard titulo="Abertas" valor={dados.total_abertas} cor="#3b82f6" destaque />
+            <KpiCard titulo="Atrasadas" valor={dados.total_atrasadas} cor="#ef4444" destaque />
+            <KpiCard titulo={`Concluídas em ${mesAtual}`} valor={dados.total_concluidas_mes} cor="#22c55e" destaque />
+            <KpiCard
+              titulo="Tempo Médio"
+              valor={dados.tempo_medio_atendimento_dias ?? '—'}
+              unidade={dados.tempo_medio_atendimento_dias !== null ? 'dias' : undefined}
+              cor="#8b5cf6"
+            />
+            <KpiCard titulo="Canceladas" valor={dados.total_canceladas} cor="#9ca3af" />
           </div>
 
-          <div className="card">
-            <h3>Demandas Atrasadas</h3>
-            <Table
-              rows={demandasAtrasadas}
-              emptyText="Nenhuma demanda atrasada para este ano."
-              columns={[
-                { title: 'Titulo', render: (d) => d.titulo },
-                { title: 'Data Inicio', render: (d) => d.start_date || '-' },
-                { title: 'Data Fim', render: (d) => d.due_date || '-' },
-                { title: 'Status', render: (d) => STATUS_ANDAMENTO_LABELS[d.status_andamento] },
-                { title: 'Responsavel ID', render: (d) => d.responsavel_id || '-' },
-              ]}
+          {/* SLA */}
+          <SlaGauge noPrazo={dados.sla_no_prazo} vencido={dados.sla_vencido} />
+
+          {/* Alerta de gargalo */}
+          {gargalo && (
+            <div
+              style={{
+                background: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: 8,
+                padding: '12px 16px',
+                fontSize: 13,
+                color: '#92400e',
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ fontSize: 16 }}>⚠</span>
+              <span>
+                Possível gargalo detectado: <strong>{gargalo.pct}%</strong> das demandas estão com status{' '}
+                <strong>"{gargalo.label}"</strong>. Verifique bloqueios nessa etapa.
+              </span>
+            </div>
+          )}
+
+          {/* Gargalos por status + Prioridade */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <PainelBarras
+              titulo="Gargalos por Status"
+              itens={dados.por_status}
+              corFn={(label) => {
+                const key = STATUS_LABEL_TO_KEY[label];
+                return key ? (GESTAO_STATUS_COR[key] ?? '#6b7280') : '#6b7280';
+              }}
+            />
+            <PainelBarras
+              titulo="Distribuição por Prioridade"
+              itens={dados.por_prioridade}
+              corFn={(label) => PRIORIDADE_COR[label] ?? '#6b7280'}
             />
           </div>
 
-          <div className="card">
-            <h3>Monitoramento Mensal (Principios, Criterios e Evidencias)</h3>
-            <Table
-              rows={monitoramentoMensal}
-              emptyText="Sem dados de monitoramento mensal para esta auditoria."
-              columns={[
-                { title: 'Mes', render: (item) => item.mes_nome },
-                {
-                  title: 'Principios Monitorados',
-                  render: (item) => `${item.principios_monitorados}/${item.principios_cadastrados}`,
-                },
-                {
-                  title: 'Criterios Monitorados',
-                  render: (item) => `${item.criterios_monitorados}/${item.criterios_cadastrados}`,
-                },
-                { title: 'Avaliacoes no Mes', render: (item) => item.avaliacoes_registradas },
-                { title: 'Evidencias no Mes', render: (item) => item.evidencias_registradas },
-              ]}
-            />
-          </div>
+          {/* Setor + Responsável */}
+          {(dados.por_setor.length > 0 || dados.por_responsavel.length > 0) && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {dados.por_setor.length > 0 && (
+                <PainelBarras
+                  titulo="Demandas por Setor"
+                  itens={dados.por_setor}
+                  corFn={() => '#0ea5e9'}
+                />
+              )}
+              {dados.por_responsavel.length > 0 && (
+                <PainelBarras
+                  titulo="Demandas por Responsável"
+                  itens={dados.por_responsavel}
+                  corFn={() => '#8b5cf6'}
+                />
+              )}
+            </div>
+          )}
         </>
       )}
-
-      <div className="card">
-        <h3>Relatorio por Certificacao/Ano</h3>
-        <div className="filters-row">
-          <label className="form-row compact">
-            <span>Ano</span>
-            <select value={anoRelatorio} onChange={(e) => setAnoRelatorio(Number(e.target.value))}>
-              {anosDisponiveis.length === 0 ? (
-                <option value={anoRelatorio}>{anoRelatorio}</option>
-              ) : (
-                anosDisponiveis.map((ano) => (
-                  <option key={ano} value={ano}>
-                    {ano}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-
-          <label className="form-row compact">
-            <span>Certificacao</span>
-            <select value={programaRelatorio} onChange={(e) => setProgramaRelatorio(e.target.value)}>
-              <option value="">Todas</option>
-              {programas.map((programa) => (
-                <option key={programa.id} value={programa.id}>
-                  {programa.nome}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <Table
-          rows={resumoCertificacaoAno}
-          emptyText="Sem avaliacoes para os filtros selecionados."
-          columns={[
-            { title: 'Certificacao', render: (item) => item.programa_nome },
-            { title: 'Ano', render: (item) => item.year },
-            {
-              title: 'Conformes',
-              render: (item) => (
-                <button
-                  type="button"
-                  className="table-link-button"
-                  onClick={() => abrirDemandasPorRelatorio(item, 'conforme')}
-                  disabled={item.conformes === 0}
-                  title="Abrir demandas relacionadas a avaliacoes conformes"
-                >
-                  {item.conformes}
-                </button>
-              ),
-            },
-            {
-              title: 'Nao Conformes',
-              render: (item) => (
-                <button
-                  type="button"
-                  className="table-link-button"
-                  onClick={() => abrirDemandasPorRelatorio(item, 'nao_conformes')}
-                  disabled={item.nao_conformes === 0}
-                  title="Abrir demandas relacionadas a NC Menor e NC Maior"
-                >
-                  {item.nao_conformes}
-                </button>
-              ),
-            },
-            {
-              title: 'Oportunidades',
-              render: (item) => (
-                <button
-                  type="button"
-                  className="table-link-button"
-                  onClick={() => abrirDemandasPorRelatorio(item, 'oportunidade_melhoria')}
-                  disabled={item.oportunidades_melhoria === 0}
-                  title="Abrir demandas relacionadas a oportunidade de melhoria"
-                >
-                  {item.oportunidades_melhoria}
-                </button>
-              ),
-            },
-            {
-              title: 'Nao se Aplica',
-              render: (item) => (
-                <button
-                  type="button"
-                  className="table-link-button"
-                  onClick={() => abrirDemandasPorRelatorio(item, 'nao_se_aplica')}
-                  disabled={item.nao_se_aplica === 0}
-                  title="Abrir demandas relacionadas a nao se aplica"
-                >
-                  {item.nao_se_aplica}
-                </button>
-              ),
-            },
-            { title: 'Total', render: (item) => item.total_avaliacoes },
-          ]}
-        />
-      </div>
-
     </div>
   );
 }

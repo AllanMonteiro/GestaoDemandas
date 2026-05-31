@@ -1,4 +1,5 @@
-﻿from datetime import datetime
+from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,14 +17,17 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    nome: str | None = Field(default=None, min_length=2, max_length=150)
-    email: str | None = Field(default=None, min_length=3, max_length=255)
-    role: RoleEnum | None = None
-    senha: str | None = Field(default=None, min_length=6, max_length=128)
+    nome: Optional[str] = Field(default=None, min_length=2, max_length=150)
+    email: Optional[str] = Field(default=None, min_length=3, max_length=255)
+    role: Optional[RoleEnum] = None
+    senha: Optional[str] = Field(default=None, min_length=6, max_length=128)
 
 
 class UserOut(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    needs_password_change: bool
+    is_locked: bool
+    last_login: Optional[datetime]
     created_at: datetime

@@ -1,64 +1,71 @@
-﻿services:
+services:
   db:
     image: postgres:16
-    container_name: fsc_db
+    container_name: demandas_db
     environment:
-      POSTGRES_USER: fsc
-      POSTGRES_PASSWORD: fsc
-      POSTGRES_DB: fsc_db
+      POSTGRES_USER: demandas
+      POSTGRES_PASSWORD: demandas_pass
+      POSTGRES_DB: demandas_db
     ports:
-      - '5432:5432'
+      - '5434:5432'
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - demandas_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U fsc -d fsc_db']
+      test: ['CMD-SHELL', 'pg_isready -U demandas -d demandas_db']
       interval: 5s
       timeout: 5s
       retries: 20
 
   minio:
     image: minio/minio:latest
-    container_name: fsc_minio
+    container_name: demandas_minio
     command: server /data --console-address ':9001'
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio12345
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - '9002:9000'
+      - '9003:9001'
     volumes:
-      - minio_data:/data
+      - demandas_minio_data:/data
 
   api:
     build:
       context: ./api
-    container_name: fsc_api
+    container_name: demandas_api
     environment:
-      DATABASE_URL: postgresql+psycopg://fsc:fsc@db:5432/fsc_db
-      JWT_SECRET: trocar_isto
+      DATABASE_URL: postgresql+psycopg://demandas:demandas_pass@db:5432/demandas_db
+      JWT_SECRET: demandas_secret_key_2026
+      CORS_ORIGINS: http://localhost:5174,http://localhost:5173
       S3_ENDPOINT: http://minio:9000
       S3_ACCESS_KEY: minio
       S3_SECRET_KEY: minio12345
-      S3_BUCKET: evidencias
+      S3_BUCKET: demandas-anexos
     depends_on:
       db:
         condition: service_healthy
       minio:
         condition: service_started
     ports:
-      - '8001:8000'
+      - '8002:8000'
+    volumes:
+      - ./api:/app
 
   web:
     build:
       context: ./web
-    container_name: fsc_web
+    container_name: demandas_web
     environment:
-      VITE_API_BASE_URL: http://localhost:8001/api
+      VITE_API_BASE_URL: http://localhost:8002/api
+      HMR_CLIENT_PORT: 5174
     depends_on:
       - api
     ports:
-      - '5173:5173'
+      - '5174:5173'
+    volumes:
+      - ./web:/app
+      - /app/node_modules
 
 volumes:
-  db_data:
-  minio_data:
+  demandas_db_data:
+  demandas_minio_data:

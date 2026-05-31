@@ -44,9 +44,6 @@ async def login(request: Request, db: Session = Depends(get_db)) -> TokenRespons
         )
 
     user = authenticate_user(db, email, senha)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Email ou senha inválidos.')
-
     token = create_access_token(user.id)
     return TokenResponse(access_token=token, usuario=user)
 
@@ -94,5 +91,23 @@ def alterar_senha(
         )
 
     current_user.password_hash = hash_password(payload.nova_senha)
+    current_user.needs_password_change = False
     db.commit()
     return MensagemAuthOut(mensagem='Senha alterada com sucesso.')
+
+
+@router.post('/users/{user_id}/unlock', response_model=MensagemAuthOut)
+def unlock_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(RoleEnum.ADMIN)),
+) -> MensagemAuthOut:
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Usuário não encontrado.')
+    if not user.is_locked:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Usuário não está bloqueado.')
+    user.is_locked = False
+    user.failed_login_attempts = 0
+    db.commit()
+    return MensagemAuthOut(mensagem=f'Usuário {user.email} desbloqueado com sucesso.')

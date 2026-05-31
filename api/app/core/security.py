@@ -1,4 +1,5 @@
-﻿from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -30,12 +31,26 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
-def authenticate_user(db: Session, email: str, password: str) -> User | None:
+def authenticate_user(db: Session, email: str, password: str) -> User:
     user = db.scalar(select(User).where(User.email == email))
     if not user:
-        return None
+        raise HTTPException(status_code=401, detail="Email ou senha inválidos.")
+    
+    if user.is_locked:
+        raise HTTPException(status_code=403, detail="Usuário bloqueado por excesso de tentativas.")
+
     if not verify_password(password, user.password_hash):
-        return None
+        user.failed_login_attempts += 1
+        if user.failed_login_attempts >= 5:
+            user.is_locked = True
+        db.commit()
+        raise HTTPException(status_code=401, detail="Email ou senha inválidos.")
+    
+    # Reset attempts on success
+    user.failed_login_attempts = 0
+    user.last_login = datetime.now(UTC)
+    db.commit()
+    
     return user
 
 
@@ -63,4 +78,8 @@ def get_current_user(
     user = db.scalar(select(User).where(User.id == user_id_int))
     if user is None:
         raise credentials_exception
+    
+    if user.is_locked:
+        raise HTTPException(status_code=403, detail="Usuário bloqueado.")
+        
     return user

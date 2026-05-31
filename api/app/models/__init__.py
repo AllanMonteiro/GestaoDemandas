@@ -1,11 +1,11 @@
-﻿from app.models.auditlog import AcaoAuditEnum, AuditLog
+from app.models.auditlog import AcaoAuditEnum, AuditLog
 from app.models.base import Base
 from app.models.fsc import (
     AuditoriaAno,
     AnaliseNaoConformidade,
     AvaliacaoIndicador,
     Criterio,
-    Demanda,
+    DemandaFSC,
     DocumentoEvidencia,
     MonitoramentoCriterio,
     NotificacaoMonitoramento,
@@ -26,7 +26,9 @@ from app.models.fsc import (
     StatusNotificacaoEnum,
 )
 from app.models.project import (
+    AtividadeSetorConfig,
     AtividadeStatusEnum,
+    AtividadeSubatividadeConfig,
     AtividadeSubdemanda,
     Projeto,
     ProjetoPrioridadeEnum,
@@ -35,6 +37,18 @@ from app.models.project import (
     TarefaStatusEnum,
 )
 from app.models.user import RoleEnum, User
+from app.models.demanda_gestao import (
+    Demanda,
+    DemandaAnalise,
+    DemandaAnaliseCampo,
+    DemandaAnaliseMetodo,
+    DemandaAnaliseStatus,
+    DemandaComentario,
+    DemandaEvento,
+    DemandaAnexo,
+    DemandaStatus,
+    DemandaPrioridade,
+)
 
 __all__ = [
     'Base',
@@ -48,7 +62,17 @@ __all__ = [
     'AnaliseNaoConformidade',
     'AvaliacaoIndicador',
     'StatusConformidadeEnum',
+    'DemandaFSC',
     'Demanda',
+    'DemandaAnalise',
+    'DemandaAnaliseCampo',
+    'DemandaAnaliseMetodo',
+    'DemandaAnaliseStatus',
+    'DemandaComentario',
+    'DemandaEvento',
+    'DemandaAnexo',
+    'DemandaStatus',
+    'DemandaPrioridade',
     'DocumentoEvidencia',
     'MonitoramentoCriterio',
     'NotificacaoMonitoramento',
@@ -67,6 +91,8 @@ __all__ = [
     'AcaoAuditEnum',
     'Projeto',
     'TarefaProjeto',
+    'AtividadeSetorConfig',
+    'AtividadeSubatividadeConfig',
     'AtividadeSubdemanda',
     'ProjetoStatusEnum',
     'TarefaStatusEnum',

@@ -1,10 +1,13 @@
-﻿import time
+﻿import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import select, text
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.core.security import hash_password
@@ -19,7 +22,7 @@ from app.models.fsc import (
     StatusConformidadeEnum,
 )
 from app.models.user import RoleEnum, User
-from app.routers import auth, fsc, projects, reports
+from app.routers import auth, demanda_analises, demanda_gestao, fsc, projects, reports
 from app.services.s3_storage import ensure_bucket_exists
 
 settings = get_settings()
@@ -178,7 +181,8 @@ def _seed_admin_user() -> None:
                 nome='Administrador',
                 email='admin@local',
                 role=RoleEnum.ADMIN,
-                password_hash=hash_password('admin123'),
+                password_hash=hash_password(settings.ADMIN_INITIAL_PASSWORD),
+                needs_password_change=True,
             )
         )
         db.commit()
@@ -203,9 +207,9 @@ def _setup_storage_with_retry() -> None:
             if tentativa == tentativas:
                 if settings.S3_STRICT_STARTUP:
                     raise
-                print(
-                    'Aviso: não foi possível validar/criar bucket de evidências no startup. '
-                    f'O upload de arquivos pode falhar até ajustar S3. Erro: {exc}'
+                logger.warning(
+                    'Não foi possível validar/criar bucket de evidências no startup. '
+                    'O upload de arquivos pode falhar até ajustar S3. Erro: %s', exc
                 )
                 return
             time.sleep(2)
@@ -237,6 +241,8 @@ app.include_router(auth.router)
 app.include_router(fsc.router)
 app.include_router(projects.router)
 app.include_router(reports.router)
+app.include_router(demanda_analises.router)
+app.include_router(demanda_gestao.router)
 
 
 @app.get('/')
@@ -245,5 +251,31 @@ def root() -> dict[str, str]:
 
 
 @app.get('/api/health')
-def health() -> dict[str, str]:
-    return {'status': 'ok'}
+def health(response: Response) -> dict:
+    resultado: dict = {'status': 'ok', 'db': 'ok', 's3': 'ok'}
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text('SELECT 1'))
+    except Exception as exc:
+        logger.error('Health check — falha no banco: %s', exc)
+        resultado['db'] = 'error'
+        resultado['status'] = 'degraded'
+
+    try:
+        from app.services.s3_storage import get_s3_client
+        get_s3_client().head_bucket(Bucket=settings.S3_BUCKET)
+    except Exception as exc:
+        logger.warning('Health check — falha no S3: %s', exc)
+        resultado['s3'] = 'error'
+        resultado['status'] = 'degraded'
+
+    if resultado['status'] != 'ok':
+        response.status_code = 503
+
+    return resultado
+
+
+@app.get('/api/version')
+def version() -> dict[str, str]:
+    return {'version': app.version, 'app': app.title}

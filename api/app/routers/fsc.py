@@ -1,4 +1,4 @@
-﻿
+
 from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -18,7 +18,7 @@ from app.models.fsc import (
     AvaliacaoIndicador,
     ConfiguracaoSistema,
     Criterio,
-    Demanda,
+    DemandaFSC,
     DocumentoEvidencia,
     MonitoramentoCriterio,
     NotificacaoMonitoramento,
@@ -93,7 +93,7 @@ from app.schemas.fsc import (
 )
 from app.schemas.user import UserOut
 from app.services.audit_logger import registrar_log
-from app.services.s3_storage import baixar_arquivo_s3, upload_fileobj
+from app.services.s3_storage import baixar_arquivo_s3, upload_fileobj, validate_upload
 
 router = APIRouter(prefix='/api', tags=['Certificações'])
 
@@ -162,9 +162,9 @@ def _validar_exigencia_cronograma(
 
 def _contar_demandas_ativas(db: Session, avaliacao_id: int) -> int:
     count = db.scalar(
-        select(func.count(Demanda.id)).where(
-            Demanda.avaliacao_id == avaliacao_id,
-            Demanda.status_andamento.in_(STATUS_DEMANDA_ATIVA),
+        select(func.count(DemandaFSC.id)).where(
+            DemandaFSC.avaliacao_id == avaliacao_id,
+            DemandaFSC.status_andamento.in_(STATUS_DEMANDA_ATIVA),
         )
     )
     return int(count or 0)
@@ -344,8 +344,8 @@ def _validar_tipo_evidencia_compativel_com_avaliacao(
         )
 
 
-def _buscar_demanda(db: Session, demanda_id: int) -> Demanda:
-    demanda = db.get(Demanda, demanda_id)
+def _buscar_demanda(db: Session, demanda_id: int) -> DemandaFSC:
+    demanda = db.get(DemandaFSC, demanda_id)
     if not demanda:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Demanda não encontrada.')
     return demanda
@@ -372,7 +372,7 @@ def _validar_vinculos_analise_nc(
     auditoria_ano_id: int,
     avaliacao_id: int,
     demanda_id: int | None,
-) -> tuple[AuditoriaAno, AvaliacaoIndicador, Demanda | None]:
+) -> tuple[AuditoriaAno, AvaliacaoIndicador, DemandaFSC | None]:
     auditoria = _buscar_auditoria(db, auditoria_ano_id)
     avaliacao = _buscar_avaliacao(db, avaliacao_id)
     _validar_mesmo_programa(programa_id, auditoria.programa_id, 'analise nc (auditoria)')
@@ -1694,9 +1694,16 @@ def upload_evidencia(
         tipo = _buscar_tipo_evidencia(db, tipo_evidencia_id)
         _validar_tipo_evidencia_compativel_com_avaliacao(db, tipo, avaliacao)
 
+    conteudo = file.file.read()
+    try:
+        validate_upload(file.filename or 'arquivo', len(conteudo), file.content_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     suffix = Path(file.filename or 'arquivo').suffix
     key = f'auditoria_{avaliacao.auditoria_ano_id}/avaliacao_{avaliacao.id}/{uuid4().hex}{suffix}'
-    url_or_path = upload_fileobj(file.file, key, file.content_type)
+    import io
+    url_or_path = upload_fileobj(io.BytesIO(conteudo), key, file.content_type)
 
     evidencia = Evidencia(
         programa_id=avaliacao.programa_id,
@@ -2433,7 +2440,7 @@ def listar_analises_nc(
     if responsavel_id:
         query = query.where(AnaliseNaoConformidade.responsavel_id == responsavel_id)
     if current_user.role == RoleEnum.RESPONSAVEL:
-        demandas_responsavel_subq = select(Demanda.id).where(Demanda.responsavel_id == current_user.id)
+        demandas_responsavel_subq = select(DemandaFSC.id).where(DemandaFSC.responsavel_id == current_user.id)
         query = query.where(
             or_(
                 AnaliseNaoConformidade.responsavel_id == current_user.id,
@@ -2668,13 +2675,13 @@ def listar_demandas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[DemandaOut]:
-    query = select(Demanda).join(AvaliacaoIndicador, Demanda.avaliacao_id == AvaliacaoIndicador.id)
+    query = select(DemandaFSC).join(AvaliacaoIndicador, DemandaFSC.avaliacao_id == AvaliacaoIndicador.id)
     if programa_id:
-        query = query.where(Demanda.programa_id == programa_id)
+        query = query.where(DemandaFSC.programa_id == programa_id)
     if auditoria_id:
         query = query.where(AvaliacaoIndicador.auditoria_ano_id == auditoria_id)
     if avaliacao_id:
-        query = query.where(Demanda.avaliacao_id == avaliacao_id)
+        query = query.where(DemandaFSC.avaliacao_id == avaliacao_id)
     if nao_conformes:
         query = query.where(
             AvaliacaoIndicador.status_conformidade.in_(
@@ -2684,18 +2691,18 @@ def listar_demandas(
     elif status_conformidade:
         query = query.where(AvaliacaoIndicador.status_conformidade == status_conformidade)
     if status_andamento:
-        query = query.where(Demanda.status_andamento == status_andamento)
+        query = query.where(DemandaFSC.status_andamento == status_andamento)
     if responsavel_id:
-        query = query.where(Demanda.responsavel_id == responsavel_id)
+        query = query.where(DemandaFSC.responsavel_id == responsavel_id)
     if current_user.role == RoleEnum.RESPONSAVEL:
-        query = query.where(Demanda.responsavel_id == current_user.id)
+        query = query.where(DemandaFSC.responsavel_id == current_user.id)
     if atrasadas:
         query = query.where(
-            Demanda.due_date.is_not(None),
-            Demanda.due_date < date.today(),
-            Demanda.status_andamento != StatusAndamentoEnum.concluida,
+            DemandaFSC.due_date.is_not(None),
+            DemandaFSC.due_date < date.today(),
+            DemandaFSC.status_andamento != StatusAndamentoEnum.concluida,
         )
-    query = query.order_by(Demanda.start_date.asc().nulls_last(), Demanda.due_date.asc().nulls_last(), Demanda.id.desc())
+    query = query.order_by(DemandaFSC.start_date.asc().nulls_last(), DemandaFSC.due_date.asc().nulls_last(), DemandaFSC.id.desc())
     return list(db.scalars(query).all())
 
 
@@ -2712,7 +2719,7 @@ def criar_demanda(
     _validar_datas_demanda(start_date_value, due_date_value)
     _validar_exigencia_cronograma(avaliacao.status_conformidade, start_date_value, due_date_value)
 
-    demanda = Demanda(
+    demanda = DemandaFSC(
         **payload.model_dump(exclude={'start_date', 'due_date'}),
         start_date=start_date_value,
         due_date=due_date_value,

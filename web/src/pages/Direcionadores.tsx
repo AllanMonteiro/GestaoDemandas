@@ -294,7 +294,7 @@ export default function Direcionadores() {
                         <span className="driver-code">Sem subdemanda</span>
                         <p>Esta demanda ainda nao possui subdemandas.</p>
                         <div className="driver-card-footer">
-                          <button type="button" className="btn-secondary" onClick={() => navigate('/demandas')}>
+                          <button type="button" className="btn-secondary" onClick={() => navigate('/projetos')}>
                             Abrir demandas
                           </button>
                         </div>
@@ -319,7 +319,7 @@ export default function Direcionadores() {
                     {demanda.subdemandas.length === 0 ? (
                       <article className="driver-idea-card driver-idea-empty">
                         <p>Sem subdemandas para listar atividades.</p>
-                        <button type="button" className="btn-secondary" onClick={() => navigate('/demandas')}>
+                        <button type="button" className="btn-secondary" onClick={() => navigate('/projetos')}>
                           Cadastrar subdemanda
                         </button>
                       </article>
@@ -329,7 +329,7 @@ export default function Direcionadores() {
                           {subdemanda.atividades.length === 0 ? (
                             <article className="driver-idea-card driver-idea-empty">
                               <p>Sem atividade cadastrada nesta subdemanda.</p>
-                              <button type="button" className="btn-secondary" onClick={() => navigate('/demandas')}>
+                              <button type="button" className="btn-secondary" onClick={() => navigate('/projetos')}>
                                 Cadastrar atividade
                               </button>
                             </article>
@@ -346,7 +346,7 @@ export default function Direcionadores() {
                                 <p>{atividade.descricao || 'Sem descricao cadastrada.'}</p>
                                 <div className="driver-idea-footer">
                                   <small>Ordem {atividade.ordem}</small>
-                                  <button type="button" className="btn-secondary" onClick={() => navigate('/demandas')}>
+                                  <button type="button" className="btn-secondary" onClick={() => navigate('/projetos')}>
                                     Abrir demanda
                                   </button>
                                 </div>

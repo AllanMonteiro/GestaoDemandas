@@ -78,7 +78,7 @@ class ProgramaCertificacao(Base):
     auditorias = relationship('AuditoriaAno', back_populates='programa')
     avaliacoes = relationship('AvaliacaoIndicador', back_populates='programa')
     evidencias = relationship('Evidencia', back_populates='programa')
-    demandas = relationship('Demanda', back_populates='programa')
+    demandas = relationship('DemandaFSC', back_populates='programa')
     tipos_evidencia = relationship('EvidenceType', back_populates='programa')
     documentos_evidencia = relationship('DocumentoEvidencia', back_populates='programa')
     monitoramentos_criterio = relationship('MonitoramentoCriterio', back_populates='programa')
@@ -183,7 +183,7 @@ class AvaliacaoIndicador(Base):
     indicador = relationship('Indicador', back_populates='avaliacoes')
     auditoria = relationship('AuditoriaAno', back_populates='avaliacoes')
     evidencias = relationship('Evidencia', back_populates='avaliacao', cascade='all, delete-orphan')
-    demandas = relationship('Demanda', back_populates='avaliacao', cascade='all, delete-orphan')
+    demandas = relationship('DemandaFSC', back_populates='avaliacao', cascade='all, delete-orphan')
     analises_nc = relationship('AnaliseNaoConformidade', back_populates='avaliacao', cascade='all, delete-orphan')
 
 
@@ -399,7 +399,7 @@ class AnaliseNaoConformidade(Base):
         index=True,
     )
     demanda_id: Mapped[int | None] = mapped_column(
-        ForeignKey('demandas.id', ondelete='SET NULL'),
+        ForeignKey('demandas_fsc.id', ondelete='SET NULL'),
         nullable=True,
         index=True,
     )
@@ -439,13 +439,13 @@ class AnaliseNaoConformidade(Base):
     programa = relationship('ProgramaCertificacao', back_populates='analises_nc')
     auditoria = relationship('AuditoriaAno', back_populates='analises_nc')
     avaliacao = relationship('AvaliacaoIndicador', back_populates='analises_nc')
-    demanda = relationship('Demanda', back_populates='analises_nc')
+    demanda = relationship('DemandaFSC', back_populates='analises_nc')
     criador = relationship('User', foreign_keys=[created_by], back_populates='analises_nc_criadas')
     responsavel = relationship('User', foreign_keys=[responsavel_id], back_populates='analises_nc_responsavel')
 
 
-class Demanda(Base):
-    __tablename__ = 'demandas'
+class DemandaFSC(Base):
+    __tablename__ = 'demandas_fsc'
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     programa_id: Mapped[int] = mapped_column(ForeignKey('programas_certificacao.id', ondelete='RESTRICT'), nullable=False, index=True)
@@ -476,7 +476,7 @@ class Demanda(Base):
 
     programa = relationship('ProgramaCertificacao', back_populates='demandas')
     avaliacao = relationship('AvaliacaoIndicador', back_populates='demandas')
-    responsavel = relationship('User', back_populates='demandas_responsavel')
+    responsavel = relationship('User')
     analises_nc = relationship('AnaliseNaoConformidade', back_populates='demanda')
 
 

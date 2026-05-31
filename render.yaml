@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sistema-certificacoes-api
+    name: gestao-demandas-api
     runtime: python
     rootDir: api
     plan: free
@@ -14,6 +14,8 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
+      - key: ADMIN_INITIAL_PASSWORD
+        sync: false
       - key: CORS_ORIGINS
         sync: false
       - key: S3_ENDPOINT
@@ -23,14 +25,16 @@ services:
       - key: S3_SECRET_KEY
         sync: false
       - key: S3_BUCKET
-        value: evidencias
+        value: demandas-anexos
       - key: S3_REGION
         value: auto
       - key: S3_STRICT_STARTUP
         value: "false"
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "50"
 
   - type: web
-    name: sistema-certificacoes-web
+    name: gestao-demandas-web
     runtime: static
     rootDir: web
     buildCommand: npm ci && npm run build

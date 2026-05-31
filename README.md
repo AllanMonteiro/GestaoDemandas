@@ -39,6 +39,10 @@ docker compose exec api alembic upgrade head
 - Swagger: `http://localhost:8001/docs`
 - Web: `http://localhost:5173`
 
+## Deploy
+
+- Render + Supabase: veja [DEPLOY_RENDER_SUPABASE.md](/abs/c:/Trabalho/01-Programação/GestaoDemandas/Demandas/DEPLOY_RENDER_SUPABASE.md)
+
 ## Credencial inicial
 
 - Email: `admin@local`

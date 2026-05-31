@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 
 type Column<T> = {
   title: string;
@@ -9,9 +9,19 @@ type Props<T> = {
   columns: Column<T>[];
   rows: T[];
   emptyText?: string;
+  onRowClick?: (row: T) => void;
 };
 
-export default function Table<T>({ columns, rows, emptyText = 'Sem dados.' }: Props<T>) {
+export default function Table<T>({ columns, rows, emptyText = 'Sem dados.', onRowClick }: Props<T>) {
+  const handleRowClick = (event: React.MouseEvent<HTMLTableRowElement>, row: T) => {
+    if (!onRowClick) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('button, a, input, select, textarea, label')) {
+      return;
+    }
+    onRowClick(row);
+  };
+
   return (
     <div className="table-wrapper">
       <table className="table">
@@ -31,7 +41,11 @@ export default function Table<T>({ columns, rows, emptyText = 'Sem dados.' }: Pr
             </tr>
           ) : (
             rows.map((row, idx) => (
-              <tr key={idx}>
+              <tr 
+                key={idx} 
+                onClick={(event) => handleRowClick(event, row)}
+                style={{ cursor: onRowClick ? 'pointer' : 'default' }}
+              >
                 {columns.map((column) => (
                   <td key={column.title}>{column.render(row)}</td>
                 ))}
