@@ -38,12 +38,12 @@ export default function Login({ onLogin }: Props) {
 
         <label className="form-row">
           <span>Email</span>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+          <input id="email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" required />
         </label>
 
         <label className="form-row">
           <span>Senha</span>
-          <input value={senha} onChange={(e) => setSenha(e.target.value)} type="password" required />
+          <input id="senha" name="senha" value={senha} onChange={(e) => setSenha(e.target.value)} type="password" autoComplete="current-password" required />
         </label>
 
         {erro && <div className="error">{erro}</div>}
