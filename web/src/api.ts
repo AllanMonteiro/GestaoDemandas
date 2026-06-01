@@ -571,6 +571,8 @@ export interface AtividadeSubdemanda {
   subatividade?: string | null;
   status: AtividadeSubdemandaStatus;
   ordem: number;
+  responsavel_id?: number | null;
+  responsavel?: { id: number; nome: string } | null;
   created_by: number;
   created_at: string;
   updated_at: string;

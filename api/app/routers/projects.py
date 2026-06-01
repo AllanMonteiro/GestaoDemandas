@@ -665,7 +665,11 @@ def listar_atividades_subdemanda(
     tarefa = _buscar_tarefa(db, tarefa_id)
     _validar_acesso_tarefa(tarefa, current_user)
 
-    query = select(AtividadeSubdemanda).where(AtividadeSubdemanda.tarefa_id == tarefa_id)
+    query = (
+        select(AtividadeSubdemanda)
+        .where(AtividadeSubdemanda.tarefa_id == tarefa_id)
+        .options(selectinload(AtividadeSubdemanda.responsavel))
+    )
     if status_atividade:
         query = query.where(AtividadeSubdemanda.status == status_atividade)
     query = query.order_by(AtividadeSubdemanda.ordem.asc(), AtividadeSubdemanda.id.asc())
@@ -735,7 +739,11 @@ def atualizar_atividade_subdemanda(
         setattr(atividade, field, value)
 
     db.commit()
-    db.refresh(atividade)
+    atividade = db.scalar(
+        select(AtividadeSubdemanda)
+        .where(AtividadeSubdemanda.id == atividade.id)
+        .options(selectinload(AtividadeSubdemanda.responsavel))
+    )
     return atividade
 
 

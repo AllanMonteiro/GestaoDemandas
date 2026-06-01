@@ -217,6 +217,7 @@ class AtividadeSubdemanda(Base):
         server_default=AtividadeStatusEnum.pendente.value,
     )
     ordem: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
+    responsavel_id: Mapped[int | None] = mapped_column(ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey('usuarios.id', ondelete='RESTRICT'), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -227,3 +228,4 @@ class AtividadeSubdemanda(Base):
     )
 
     tarefa = relationship('TarefaProjeto', back_populates='atividades')
+    responsavel = relationship('User', foreign_keys=[responsavel_id])

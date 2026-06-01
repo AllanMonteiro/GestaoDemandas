@@ -165,6 +165,12 @@ class DemandaHistoricoOut(BaseModel):
     created_at: datetime
 
 
+class UsuarioMinimoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nome: str
+
+
 class AtividadeSubdemandaCreate(BaseModel):
     titulo: str = Field(min_length=2, max_length=255)
     descricao: str | None = None
@@ -172,6 +178,7 @@ class AtividadeSubdemandaCreate(BaseModel):
     subatividade: str | None = Field(default=None, max_length=120)
     status: AtividadeStatusEnum = AtividadeStatusEnum.pendente
     ordem: int = Field(default=0, ge=0)
+    responsavel_id: int | None = None
 
 
 class AtividadeSubdemandaUpdate(BaseModel):
@@ -181,6 +188,7 @@ class AtividadeSubdemandaUpdate(BaseModel):
     subatividade: str | None = Field(default=None, max_length=120)
     status: AtividadeStatusEnum | None = None
     ordem: int | None = Field(default=None, ge=0)
+    responsavel_id: int | None = None
 
 
 class AtividadeSubdemandaStatusPatch(BaseModel):
@@ -198,6 +206,8 @@ class AtividadeSubdemandaOut(BaseModel):
     subatividade: str | None
     status: AtividadeStatusEnum
     ordem: int
+    responsavel_id: int | None
+    responsavel: UsuarioMinimoOut | None = None
     created_by: int
     created_at: datetime
     updated_at: datetime

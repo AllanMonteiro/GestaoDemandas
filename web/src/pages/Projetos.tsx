@@ -86,6 +86,7 @@ export default function Projetos() {
     setor: '',
     subatividade: '',
     ordem: '',
+    responsavel_id: '',
   });
 
   const [subatividadesSelecionadas, setSubatividadesSelecionadas] = useState<string[]>([]);
@@ -463,6 +464,8 @@ export default function Projetos() {
     try {
       const promessas = [];
 
+      const responsavelId = novaAtividade.responsavel_id ? Number(novaAtividade.responsavel_id) : undefined;
+
       // 1. Cadastrar subatividades selecionadas via checkbox
       for (const nomeSub of subatividadesSelecionadas) {
         const subConfig = subatividadesDisponiveis.find((s) => s.nome === nomeSub);
@@ -475,6 +478,7 @@ export default function Projetos() {
             setor: novaAtividade.setor || undefined,
             subatividade: nomeSub,
             ordem: ordem,
+            responsavel_id: responsavelId,
           })
         );
       }
@@ -488,13 +492,14 @@ export default function Projetos() {
             setor: novaAtividade.setor || undefined,
             subatividade: undefined,
             ordem: novaAtividade.ordem ? Number(novaAtividade.ordem) : 0,
+            responsavel_id: responsavelId,
           })
         );
       }
 
       await Promise.all(promessas);
 
-      setNovaAtividade({ titulo: '', descricao: '', setor: '', subatividade: '', ordem: '' });
+      setNovaAtividade({ titulo: '', descricao: '', setor: '', subatividade: '', ordem: '', responsavel_id: '' });
       setSubatividadesSelecionadas([]);
       setSubdemandaComFormAberto(null);
       setMensagem(`${promessas.length} atividade(s) cadastrada(s) na subdemanda.`);
@@ -1008,6 +1013,11 @@ export default function Projetos() {
                                     {atividade.setor} {atividade.subatividade ? `· ${atividade.subatividade}` : ''}
                                   </span>
                                 )}
+                                {atividade.responsavel && (
+                                  <span style={{ fontSize: '10.5px', padding: '2px 6px', background: '#fef3e2', color: '#7c5e3c', borderRadius: '4px', fontWeight: 600 }}>
+                                    {atividade.responsavel.nome}
+                                  </span>
+                                )}
                                 {podeCriarAtividades && (
                                   <button
                                     type="button"
@@ -1048,7 +1058,7 @@ export default function Projetos() {
                             } else {
                               setSubdemandaComFormAberto(tarefa.id);
                               setTarefaSelecionadaId(tarefa.id);
-                              setNovaAtividade({ titulo: '', descricao: '', setor: '', subatividade: '', ordem: '' });
+                              setNovaAtividade({ titulo: '', descricao: '', setor: '', subatividade: '', ordem: '', responsavel_id: '' });
                               setSubatividadesSelecionadas([]);
                             }
                           }}
@@ -1161,14 +1171,28 @@ export default function Projetos() {
                               </label>
                             </div>
 
-                            <label className="form-row">
-                              <span>Descrição</span>
-                              <input
-                                value={novaAtividade.descricao}
-                                onChange={(e) => setNovaAtividade((prev) => ({ ...prev, descricao: e.target.value }))}
-                                placeholder="Descrição opcional..."
-                              />
-                            </label>
+                            <div className="grid two-col gap-12">
+                              <label className="form-row">
+                                <span>Descrição</span>
+                                <input
+                                  value={novaAtividade.descricao}
+                                  onChange={(e) => setNovaAtividade((prev) => ({ ...prev, descricao: e.target.value }))}
+                                  placeholder="Descrição opcional..."
+                                />
+                              </label>
+                              <label className="form-row">
+                                <span>Responsável pela Execução</span>
+                                <select
+                                  value={novaAtividade.responsavel_id}
+                                  onChange={(e) => setNovaAtividade((prev) => ({ ...prev, responsavel_id: e.target.value }))}
+                                >
+                                  <option value="">Não atribuído</option>
+                                  {usuarios.map((u) => (
+                                    <option key={u.id} value={u.id}>{u.nome}</option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
 
                             <button type="submit" style={{ fontSize: '13px', padding: '8px 16px' }}>
                               {subatividadesSelecionadas.length > 0
