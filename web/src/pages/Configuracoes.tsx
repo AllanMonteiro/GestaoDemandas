@@ -9,6 +9,7 @@ type Props = {
 export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
   const [configuracao, setConfiguracao] = useState<ConfiguracaoSistema | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [setoresAtividade, setSetoresAtividade] = useState<AtividadeSetorConfig[]>([]);
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [arquivoLogo, setArquivoLogo] = useState<File | null>(null);
@@ -17,6 +18,7 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
   const [confirmacaoNovaSenha, setConfirmacaoNovaSenha] = useState('');
   const [novoSetor, setNovoSetor] = useState({ nome: '', ordem: '0' });
   const [novaSubatividade, setNovaSubatividade] = useState({ setor_id: '', nome: '', ordem: '0' });
+  const [novoUsuario, setNovoUsuario] = useState({ nome: '', email: '', role: 'RESPONSAVEL', senha: '' });
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
 
@@ -42,6 +44,10 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
       setNomeEmpresa(configResp.data.nome_empresa);
       setUsuario(usuarioResp.data);
       setSetoresAtividade(setoresResp.data);
+      if (usuarioResp.data.role === 'ADMIN') {
+        const usuariosResp = await api.get<Usuario[]>('/auth/users');
+        setUsuarios(usuariosResp.data);
+      }
     } catch (err: unknown) {
       setErro(getApiErrorMessage(err, 'Falha ao carregar configuracoes.'));
     }
@@ -201,6 +207,33 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
       setMensagem('Setor removido com sucesso.');
     } catch (err: unknown) {
       setErro(getApiErrorMessage(err, 'Falha ao remover setor.'));
+    }
+  };
+
+  const cadastrarUsuario = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      setErro('');
+      setMensagem('');
+      await api.post('/auth/register', novoUsuario);
+      setNovoUsuario({ nome: '', email: '', role: 'RESPONSAVEL', senha: '' });
+      await carregar();
+      setMensagem('Usuário cadastrado com sucesso.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao cadastrar usuário.'));
+    }
+  };
+
+  const removerUsuario = async (userId: number) => {
+    if (!confirm('Confirma a remoção deste usuário?')) return;
+    try {
+      setErro('');
+      setMensagem('');
+      await api.delete(`/auth/users/${userId}`);
+      await carregar();
+      setMensagem('Usuário removido com sucesso.');
+    } catch (err: unknown) {
+      setErro(getApiErrorMessage(err, 'Falha ao remover usuário.'));
     }
   };
 
@@ -412,6 +445,90 @@ export default function Configuracoes({ refreshConfiguracaoNoHeader }: Props) {
           </div>
         )}
       </div>
+
+      {usuario?.role === 'ADMIN' && (
+        <div className="card grid gap-12">
+          <h3>Usuários do Sistema</h3>
+
+          <form className="grid gap-12" onSubmit={cadastrarUsuario}>
+            <h4 style={{ margin: 0 }}>Cadastrar novo usuário</h4>
+            <div className="grid two-col gap-12">
+              <label className="form-row">
+                <span>Nome</span>
+                <input
+                  value={novoUsuario.nome}
+                  onChange={(e) => setNovoUsuario((p) => ({ ...p, nome: e.target.value }))}
+                  placeholder="Nome completo"
+                  required
+                />
+              </label>
+              <label className="form-row">
+                <span>E-mail</span>
+                <input
+                  type="email"
+                  value={novoUsuario.email}
+                  onChange={(e) => setNovoUsuario((p) => ({ ...p, email: e.target.value }))}
+                  placeholder="email@empresa.com"
+                  required
+                />
+              </label>
+              <label className="form-row">
+                <span>Perfil</span>
+                <select
+                  value={novoUsuario.role}
+                  onChange={(e) => setNovoUsuario((p) => ({ ...p, role: e.target.value }))}
+                >
+                  <option value="RESPONSAVEL">Responsável</option>
+                  <option value="GESTOR">Gestor</option>
+                  <option value="AUDITOR">Auditor</option>
+                  <option value="SOLICITANTE">Solicitante</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </label>
+              <label className="form-row">
+                <span>Senha inicial</span>
+                <input
+                  type="password"
+                  value={novoUsuario.senha}
+                  onChange={(e) => setNovoUsuario((p) => ({ ...p, senha: e.target.value }))}
+                  placeholder="Mínimo 6 caracteres"
+                  minLength={6}
+                  required
+                />
+              </label>
+            </div>
+            <button type="submit" style={{ alignSelf: 'flex-start' }}>Cadastrar Usuário</button>
+          </form>
+
+          <div style={{ borderTop: '1px solid #e5ecf5', paddingTop: 12 }}>
+            <h4 style={{ margin: '0 0 10px' }}>Usuários cadastrados</h4>
+            {usuarios.length === 0 ? (
+              <p className="muted-text">Nenhum usuário além do admin.</p>
+            ) : (
+              <div className="grid gap-8">
+                {usuarios.map((u) => (
+                  <div key={u.id} className="between" style={{ padding: '8px 12px', background: '#f8fbff', borderRadius: 6, border: '1px solid #d5e4f1' }}>
+                    <div>
+                      <strong>{u.nome}</strong>
+                      <div className="muted-text" style={{ fontSize: 12 }}>{u.email} · {u.role}</div>
+                    </div>
+                    {u.id !== usuario?.id && (
+                      <button
+                        type="button"
+                        className="btn-danger"
+                        style={{ fontSize: 12, padding: '3px 10px' }}
+                        onClick={() => void removerUsuario(u.id)}
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="card grid gap-12">
         <h3>Senha de Login</h3>

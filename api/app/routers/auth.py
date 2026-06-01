@@ -96,6 +96,55 @@ def alterar_senha(
     return MensagemAuthOut(mensagem='Senha alterada com sucesso.')
 
 
+@router.get('/users', response_model=list[UserOut])
+def listar_usuarios(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(RoleEnum.ADMIN)),
+) -> list[UserOut]:
+    return list(db.scalars(select(User).order_by(User.nome)).all())
+
+
+@router.patch('/users/{user_id}', response_model=UserOut)
+def atualizar_usuario(
+    user_id: int,
+    payload: 'UserUpdate',
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN)),
+) -> UserOut:
+    from app.schemas.user import UserUpdate
+    from app.core.security import hash_password as _hash
+
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Usuário não encontrado.')
+
+    data = payload.model_dump(exclude_unset=True)
+    if 'senha' in data:
+        data['password_hash'] = _hash(data.pop('senha'))
+    for field, value in data.items():
+        setattr(user, field, value)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete('/users/{user_id}', response_model=MensagemAuthOut)
+def remover_usuario(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleEnum.ADMIN)),
+) -> MensagemAuthOut:
+    if user_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Não é possível remover seu próprio usuário.')
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Usuário não encontrado.')
+    db.delete(user)
+    db.commit()
+    return MensagemAuthOut(mensagem=f'Usuário {user.email} removido com sucesso.')
+
+
 @router.post('/users/{user_id}/unlock', response_model=MensagemAuthOut)
 def unlock_user(
     user_id: int,
