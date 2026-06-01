@@ -7,6 +7,7 @@ import DemandaForm from './pages/DemandaForm';
 import DemandaDetail from './pages/DemandaDetail';
 import DemandasDashboard from './pages/DemandasDashboard';
 import DemandasKanban from './pages/DemandasKanban';
+import DemandasCalendario from './pages/DemandasCalendario';
 import Direcionadores from './pages/Direcionadores';
 import Login from './pages/Login';
 import Projetos from './pages/Projetos';
@@ -115,6 +116,14 @@ export default function AppRoutes({ token, onLogin, refreshConfiguracaoNoHeader 
         element={
           <ProtectedRoute token={token}>
             <DemandasKanban />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/demandas-calendario"
+        element={
+          <ProtectedRoute token={token}>
+            <DemandasCalendario />
           </ProtectedRoute>
         }
       />

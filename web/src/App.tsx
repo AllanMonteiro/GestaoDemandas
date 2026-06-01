@@ -114,6 +114,9 @@ export default function App() {
                   <NavLink to="/demandas-kanban" className={navLinkClass}>
                     Quadro Kanban
                   </NavLink>
+                  <NavLink to="/demandas-calendario" className={navLinkClass}>
+                    Calendário
+                  </NavLink>
                   <NavLink to="/demandas-dashboard" className={navLinkClass}>
                     Dashboard / KPIs
                   </NavLink>
