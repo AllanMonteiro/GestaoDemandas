@@ -188,6 +188,7 @@ def listar_demandas(
     setor: Optional[str] = Query(None),
     atrasadas: Optional[bool] = Query(None),
     busca: Optional[str] = Query(None),
+    incluir_subdemandas: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[DemandaListItem]:
@@ -203,10 +204,11 @@ def listar_demandas(
     elif current_user.role == RoleEnum.SOLICITANTE:
         query = query.where(Demanda.solicitante_id == current_user.id)
 
-    if parent_demanda_id is None:
-        query = query.where(Demanda.parent_demanda_id.is_(None))
-    else:
-        query = query.where(Demanda.parent_demanda_id == parent_demanda_id)
+    if not incluir_subdemandas:
+        if parent_demanda_id is None:
+            query = query.where(Demanda.parent_demanda_id.is_(None))
+        else:
+            query = query.where(Demanda.parent_demanda_id == parent_demanda_id)
 
     # Filtros dinâmicos
     if status:

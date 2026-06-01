@@ -32,7 +32,9 @@ export default function DemandasCalendario() {
     const carregar = async () => {
       try {
         setCarregando(true);
-        const { data } = await api.get<DemandaListItem[]>('/gestao-demandas');
+        const { data } = await api.get<DemandaListItem[]>('/gestao-demandas', {
+          params: { incluir_subdemandas: true },
+        });
         setDemandas(data);
       } catch (err: unknown) {
         setErro(getApiErrorMessage(err, 'Falha ao carregar demandas.'));
@@ -79,16 +81,19 @@ export default function DemandasCalendario() {
 
   const totalMes = useMemo(() => {
     const prefixo = `${ano}-${String(mes + 1).padStart(2, '0')}`;
-    return demandas.filter((d) => d.prazo?.startsWith(prefixo)).length;
+    const total = demandas.filter((d) => d.prazo?.startsWith(prefixo)).length;
+    const subs = demandas.filter((d) => d.prazo?.startsWith(prefixo) && d.parent_demanda_id).length;
+    return { total, subs };
   }, [demandas, ano, mes]);
 
   return (
     <div className="grid gap-16">
       <div className="between">
         <h2>Calendário de Demandas</h2>
-        {totalMes > 0 && (
+        {totalMes.total > 0 && (
           <span style={{ fontSize: 13, color: '#56738f' }}>
-            {totalMes} demanda{totalMes !== 1 ? 's' : ''} com prazo neste mês
+            {totalMes.total} demanda{totalMes.total !== 1 ? 's' : ''} com prazo neste mês
+            {totalMes.subs > 0 && ` (${totalMes.subs} subdemanda${totalMes.subs !== 1 ? 's' : ''})`}
           </span>
         )}
       </div>
@@ -156,26 +161,29 @@ export default function DemandasCalendario() {
                   {demandasDoDia.map((d) => {
                     const cor = GESTAO_STATUS_COR[d.status as keyof typeof GESTAO_STATUS_COR] || '#6b7280';
                     const label = GESTAO_STATUS_LABELS[d.status as keyof typeof GESTAO_STATUS_LABELS] || d.status;
+                    const isSub = !!d.parent_demanda_id;
                     return (
                       <div
                         key={d.id}
                         onClick={() => navigate(`/demandas/${d.id}`)}
                         title={`${d.codigo} · ${d.titulo}\nStatus: ${label}\nResponsável: ${d.responsavel_nome || '—'}`}
                         style={{
-                          background: cor,
-                          color: '#fff',
+                          background: isSub ? 'transparent' : cor,
+                          color: isSub ? cor : '#fff',
+                          border: isSub ? `1px solid ${cor}` : 'none',
                           fontSize: 10,
                           fontWeight: 600,
                           padding: '2px 5px',
                           borderRadius: 3,
                           marginBottom: 2,
+                          marginLeft: isSub ? 4 : 0,
                           cursor: 'pointer',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {d.codigo} {d.titulo}
+                        {isSub ? '↳ ' : ''}{d.codigo} {d.titulo}
                       </div>
                     );
                   })}

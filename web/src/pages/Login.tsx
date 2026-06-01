@@ -9,8 +9,8 @@ type Props = {
 
 export default function Login({ onLogin }: Props) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('admin@local');
-  const [senha, setSenha] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [loading, setLoading] = useState(false);
 

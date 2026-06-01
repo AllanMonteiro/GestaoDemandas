@@ -175,6 +175,11 @@ def _seed_admin_user() -> None:
     with SessionLocal() as db:
         admin = db.scalar(select(User).where(User.email == 'admin@local'))
         if admin:
+            if admin.needs_password_change:
+                admin.password_hash = hash_password(settings.ADMIN_INITIAL_PASSWORD)
+                admin.is_locked = False
+                admin.failed_login_attempts = 0
+                db.commit()
             return
         db.add(
             User(
