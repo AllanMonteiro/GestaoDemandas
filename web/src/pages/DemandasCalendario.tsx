@@ -32,7 +32,9 @@ export default function DemandasCalendario() {
     const carregar = async () => {
       try {
         setCarregando(true);
-        const { data } = await api.get<DemandaListItem[]>('/gestao-demandas');
+        const { data } = await api.get<DemandaListItem[]>('/gestao-demandas', {
+          params: { incluir_subdemandas: true },
+        });
         setDemandas(data);
       } catch (err: unknown) {
         setErro(getApiErrorMessage(err, 'Falha ao carregar demandas.'));
@@ -43,16 +45,37 @@ export default function DemandasCalendario() {
     void carregar();
   }, []);
 
+  // demandasPorDia: day -> list of { demanda (pai), subsDoDia }
+  // A demanda mãe aparece num dia se tem prazo próprio naquele dia
+  // OU se alguma subdemanda tem prazo naquele dia.
   const demandasPorDia = useMemo(() => {
-    const map = new Map<string, DemandaListItem[]>();
-    demandas.forEach((d) => {
-      if (d.prazo) {
-        const chave = d.prazo.slice(0, 10);
-        if (!map.has(chave)) map.set(chave, []);
-        map.get(chave)!.push(d);
+    type DiaEntry = { demanda: DemandaListItem; subsDoDia: DemandaListItem[] };
+
+    const pais = demandas.filter((d) => !d.parent_demanda_id);
+    const subs = demandas.filter((d) => !!d.parent_demanda_id);
+    const paiById = new Map(pais.map((p) => [p.id, p]));
+
+    // day -> Map<demanda_id, DiaEntry>
+    const inner = new Map<string, Map<number, DiaEntry>>();
+
+    const upsert = (chave: string, pai: DemandaListItem, sub?: DemandaListItem) => {
+      if (!inner.has(chave)) inner.set(chave, new Map());
+      const diaMap = inner.get(chave)!;
+      if (!diaMap.has(pai.id)) diaMap.set(pai.id, { demanda: pai, subsDoDia: [] });
+      if (sub) diaMap.get(pai.id)!.subsDoDia.push(sub);
+    };
+
+    pais.forEach((p) => { if (p.prazo) upsert(p.prazo.slice(0, 10), p); });
+    subs.forEach((s) => {
+      if (s.prazo && s.parent_demanda_id) {
+        const pai = paiById.get(s.parent_demanda_id);
+        if (pai) upsert(s.prazo.slice(0, 10), pai, s);
       }
     });
-    return map;
+
+    const result = new Map<string, DiaEntry[]>();
+    inner.forEach((diaMap, chave) => result.set(chave, Array.from(diaMap.values())));
+    return result;
   }, [demandas]);
 
   const diasDoMes = useMemo(() => {
@@ -79,8 +102,12 @@ export default function DemandasCalendario() {
 
   const totalMes = useMemo(() => {
     const prefixo = `${ano}-${String(mes + 1).padStart(2, '0')}`;
-    return demandas.filter((d) => d.prazo?.startsWith(prefixo)).length;
-  }, [demandas, ano, mes]);
+    const ids = new Set<number>();
+    demandasPorDia.forEach((entries, chave) => {
+      if (chave.startsWith(prefixo)) entries.forEach((e) => ids.add(e.demanda.id));
+    });
+    return ids.size;
+  }, [demandasPorDia, ano, mes]);
 
   return (
     <div className="grid gap-16">
@@ -128,7 +155,7 @@ export default function DemandasCalendario() {
 
               const chave = toIso(dia);
               const isHoje = chave === hojeStr;
-              const demandasDoDia = demandasPorDia.get(chave) || [];
+              const entriesDoDia = demandasPorDia.get(chave) || [];
 
               return (
                 <div
@@ -153,14 +180,17 @@ export default function DemandasCalendario() {
                     {dia.getDate()}
                   </div>
 
-                  {demandasDoDia.map((d) => {
+                  {entriesDoDia.map(({ demanda: d, subsDoDia }) => {
                     const cor = GESTAO_STATUS_COR[d.status as keyof typeof GESTAO_STATUS_COR] || '#6b7280';
                     const label = GESTAO_STATUS_LABELS[d.status as keyof typeof GESTAO_STATUS_LABELS] || d.status;
+                    const subsInfo = subsDoDia.length > 0
+                      ? '\n\nSubdemandas neste dia:\n' + subsDoDia.map((s) => `• ${s.codigo} ${s.titulo}`).join('\n')
+                      : '';
                     return (
                       <div
                         key={d.id}
                         onClick={() => navigate(`/demandas/${d.id}`)}
-                        title={`${d.codigo} · ${d.titulo}\nStatus: ${label}\nResponsável: ${d.responsavel_nome || '—'}`}
+                        title={`${d.codigo} · ${d.titulo}\nStatus: ${label}\nResponsável: ${d.responsavel_nome || '—'}${subsInfo}`}
                         style={{
                           background: cor,
                           color: '#fff',
@@ -176,6 +206,11 @@ export default function DemandasCalendario() {
                         }}
                       >
                         {d.codigo} {d.titulo}
+                        {subsDoDia.length > 0 && (
+                          <span style={{ marginLeft: 4, opacity: 0.85, fontWeight: 400 }}>
+                            ({subsDoDia.length} sub{subsDoDia.length !== 1 ? 's' : ''})
+                          </span>
+                        )}
                       </div>
                     );
                   })}
