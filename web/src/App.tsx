@@ -120,6 +120,9 @@ export default function App() {
                   <NavLink to="/demandas-dashboard" className={navLinkClass}>
                     Dashboard / KPIs
                   </NavLink>
+                  <NavLink to="/organograma" className={navLinkClass}>
+                    Organograma
+                  </NavLink>
                   <NavLink to="/direcionadores" className={navLinkClass}>
                     Direcionadores
                   </NavLink>

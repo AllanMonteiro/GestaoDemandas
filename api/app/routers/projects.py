@@ -254,6 +254,7 @@ def criar_setor_atividade_config(
 ) -> AtividadeSetorConfigOut:
     setor = AtividadeSetorConfig(
         nome=_nome_catalogo_obrigatorio(payload.nome, 'o setor'),
+        icone=payload.icone,
         ativo=payload.ativo,
         ordem=payload.ordem,
     )
@@ -313,6 +314,7 @@ def criar_subatividade_config(
     subatividade = AtividadeSubatividadeConfig(
         setor_id=payload.setor_id,
         nome=_nome_catalogo_obrigatorio(payload.nome, 'a subatividade'),
+        icone=payload.icone,
         ativo=payload.ativo,
         ordem=payload.ordem,
     )

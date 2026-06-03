@@ -215,12 +215,14 @@ class AtividadeSubdemandaOut(BaseModel):
 
 class AtividadeSetorConfigCreate(BaseModel):
     nome: str = Field(min_length=2, max_length=120)
+    icone: str | None = Field(default=None, max_length=20)
     ativo: bool = True
     ordem: int = Field(default=0, ge=0)
 
 
 class AtividadeSetorConfigUpdate(BaseModel):
     nome: str | None = Field(default=None, min_length=2, max_length=120)
+    icone: str | None = Field(default=None, max_length=20)
     ativo: bool | None = None
     ordem: int | None = Field(default=None, ge=0)
 
@@ -228,6 +230,7 @@ class AtividadeSetorConfigUpdate(BaseModel):
 class AtividadeSubatividadeConfigCreate(BaseModel):
     setor_id: int
     nome: str = Field(min_length=2, max_length=120)
+    icone: str | None = Field(default=None, max_length=20)
     ativo: bool = True
     ordem: int = Field(default=0, ge=0)
 
@@ -235,6 +238,7 @@ class AtividadeSubatividadeConfigCreate(BaseModel):
 class AtividadeSubatividadeConfigUpdate(BaseModel):
     setor_id: int | None = None
     nome: str | None = Field(default=None, min_length=2, max_length=120)
+    icone: str | None = Field(default=None, max_length=20)
     ativo: bool | None = None
     ordem: int | None = Field(default=None, ge=0)
 
@@ -245,6 +249,7 @@ class AtividadeSubatividadeConfigOut(BaseModel):
     id: int
     setor_id: int
     nome: str
+    icone: str | None
     ativo: bool
     ordem: int
     created_at: datetime
@@ -256,6 +261,7 @@ class AtividadeSetorConfigOut(BaseModel):
 
     id: int
     nome: str
+    icone: str | None
     ativo: bool
     ordem: int
     created_at: datetime

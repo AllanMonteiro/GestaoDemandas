@@ -145,6 +145,7 @@ class AtividadeSetorConfig(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     nome: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
+    icone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default='true')
     ordem: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -168,6 +169,7 @@ class AtividadeSubatividadeConfig(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     setor_id: Mapped[int] = mapped_column(ForeignKey('atividades_setores_config.id', ondelete='CASCADE'), nullable=False, index=True)
     nome: Mapped[str] = mapped_column(String(120), nullable=False)
+    icone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default='true')
     ordem: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

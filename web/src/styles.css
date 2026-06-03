@@ -3469,3 +3469,291 @@ button:disabled {
   border: 1px solid var(--border);
   margin-top: 8px;
 }
+
+/* ═══════════════════════════════════════════
+   ORGANOGRAMA DE ATIVIDADES
+═══════════════════════════════════════════ */
+
+.org-tree-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 8px 0 24px;
+}
+
+.org-tree-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: max-content;
+  padding: 0 24px;
+}
+
+/* Nó raiz */
+.org-root-row {
+  display: flex;
+  justify-content: center;
+}
+
+.org-node-root {
+  background: #12324d;
+  color: #ffffff;
+  padding: 14px 36px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 1rem;
+  min-width: 180px;
+  text-align: center;
+  box-shadow: var(--shadow-soft);
+}
+
+/* Linha vertical simples (root → barra / card → barra) */
+.org-stem {
+  width: 2px;
+  height: 32px;
+  background: var(--border);
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+/* Linha vertical dentro de cada branch */
+.org-child-stem {
+  width: 2px;
+  height: 28px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* ─── Linha horizontal entre irmãos (barra do organograma) ─── */
+.org-children-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.org-child-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 10px;
+  position: relative;
+  min-width: 160px;
+}
+
+/* Metade esquerda da barra horizontal (todos exceto o primeiro) */
+.org-child-wrapper:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  left: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+/* Metade direita da barra horizontal (todos exceto o último) */
+.org-child-wrapper:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+/* ─── Cards ─── */
+.org-node {
+  width: 150px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 12px 20px;
+  text-align: center;
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.org-node:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-soft);
+}
+
+.org-node-expanded {
+  border-color: var(--accent);
+}
+
+.org-node-sub {
+  width: 140px;
+  padding: 12px 10px 14px;
+}
+
+.org-node-icon {
+  font-size: 1.9rem;
+  margin-bottom: 6px;
+  line-height: 1;
+}
+
+.org-node-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+/* Botão expand/recolher (abaixo do card) */
+.org-toggle-btn {
+  position: absolute;
+  bottom: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  color: var(--accent);
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.org-toggle-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* Botão "+" para adicionar subatividade (interno ao card) */
+.org-add-inline-btn {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--accent);
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.org-node:hover .org-add-inline-btn {
+  opacity: 1;
+}
+
+/* Ações (editar/deletar) — aparecem no hover */
+.org-node-actions {
+  display: none;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  gap: 2px;
+  flex-direction: row;
+}
+
+.org-node:hover .org-node-actions {
+  display: flex;
+}
+
+.org-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 3px;
+  font-size: 11px;
+  color: var(--muted);
+  border-radius: 4px;
+  line-height: 1;
+  transition: background 0.1s;
+}
+
+.org-action-btn:hover {
+  background: var(--surface-soft);
+}
+
+.org-action-danger:hover {
+  background: #fde8e8;
+}
+
+/* ─── Seletor de ícones ─── */
+.org-icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+}
+
+.org-icon-btn {
+  background: var(--surface);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.1s, background 0.1s;
+}
+
+.org-icon-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.org-icon-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ─── Botões inferiores ─── */
+.org-bottom-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 0 8px;
+  flex-wrap: wrap;
+}
+
+.btn-outline {
+  padding: 8px 18px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.btn-outline:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

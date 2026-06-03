@@ -97,6 +97,7 @@ export interface AtividadeSubatividadeConfig {
   id: number;
   setor_id: number;
   nome: string;
+  icone?: string | null;
   ativo: boolean;
   ordem: number;
   created_at: string;
@@ -106,6 +107,7 @@ export interface AtividadeSubatividadeConfig {
 export interface AtividadeSetorConfig {
   id: number;
   nome: string;
+  icone?: string | null;
   ativo: boolean;
   ordem: number;
   created_at: string;

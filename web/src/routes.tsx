@@ -10,6 +10,7 @@ import DemandasKanban from './pages/DemandasKanban';
 import DemandasCalendario from './pages/DemandasCalendario';
 import Direcionadores from './pages/Direcionadores';
 import Login from './pages/Login';
+import Organograma from './pages/Organograma';
 import Projetos from './pages/Projetos';
 import { NotFound, Forbidden } from './pages/ErrorPages';
 
@@ -90,6 +91,14 @@ export default function AppRoutes({ token, onLogin, refreshConfiguracaoNoHeader 
         element={
           <ProtectedRoute token={token}>
             <Projetos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organograma"
+        element={
+          <ProtectedRoute token={token}>
+            <Organograma />
           </ProtectedRoute>
         }
       />
