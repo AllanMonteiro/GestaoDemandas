@@ -359,36 +359,33 @@ export default function Organograma() {
                       )}
                     </div>
 
-                    {/* Nível 2 — Subatividades (quando expandido) */}
+                    {/* Nível 2 — Subatividades (quando expandido) — coluna vertical */}
                     {expanded[setor.id] && setor.subatividades.length > 0 && (
-                      <>
-                        <div className="org-child-stem" />
-                        <div className="org-children-row">
-                          {setor.subatividades.map(sub => (
-                            <div key={sub.id} className="org-child-wrapper">
-                              <div className="org-child-stem" />
-                              <div className="org-node org-node-sub">
-                                {podeEditar && (
-                                  <div className="org-node-actions">
-                                    <button
-                                      className="org-action-btn"
-                                      title="Editar"
-                                      onClick={() => abrirEditarSubatividade(sub)}
-                                    >✏️</button>
-                                    <button
-                                      className="org-action-btn org-action-danger"
-                                      title="Remover"
-                                      onClick={() => setConfirmarDeletar({ tipo: 'subatividade', id: sub.id, nome: sub.nome })}
-                                    >🗑️</button>
-                                  </div>
-                                )}
-                                <div className="org-node-icon" style={{ fontSize: '1.4rem' }}>{sub.icone || '📄'}</div>
-                                <div className="org-node-name">{sub.nome}</div>
-                              </div>
+                      <div className="org-subatividades-col">
+                        {setor.subatividades.map(sub => (
+                          <div key={sub.id} className="org-sub-item">
+                            <div className="org-child-stem" />
+                            <div className="org-node org-node-sub">
+                              {podeEditar && (
+                                <div className="org-node-actions">
+                                  <button
+                                    className="org-action-btn"
+                                    title="Editar"
+                                    onClick={() => abrirEditarSubatividade(sub)}
+                                  >✏️</button>
+                                  <button
+                                    className="org-action-btn org-action-danger"
+                                    title="Remover"
+                                    onClick={() => setConfirmarDeletar({ tipo: 'subatividade', id: sub.id, nome: sub.nome })}
+                                  >🗑️</button>
+                                </div>
+                              )}
+                              <div className="org-node-icon" style={{ fontSize: '1.4rem' }}>{sub.icone || '📄'}</div>
+                              <div className="org-node-name">{sub.nome}</div>
                             </div>
-                          ))}
-                        </div>
-                      </>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 ))}
