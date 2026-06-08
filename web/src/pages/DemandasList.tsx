@@ -2,7 +2,13 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
-import { api, DEMANDA_STATUS_LABELS, PRIORIDADE_LABELS, ProfissionalDemandaListItem } from '../api';
+import {
+  api,
+  DEMANDA_STATUS_LABELS,
+  PRIORIDADE_LABELS,
+  ProfissionalDemandaListItem,
+  Usuario,
+} from '../api';
 import { TableSkeleton } from '../components/Skeleton';
 import Table from '../components/Table';
 
@@ -11,23 +17,49 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleDateString('pt-BR');
 }
 
+const FILTROS_VAZIOS = {
+  status: '',
+  prioridade: '',
+  atrasadas: false,
+  busca: '',
+  responsavel_id: '',
+  parent_demanda_id: '',
+};
+
 export default function DemandasList() {
   const navigate = useNavigate();
-  const [filtros, setFiltros] = useState({
-    status: '',
-    prioridade: '',
-    atrasadas: false,
-    busca: '',
+  const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
+
+  const { data: usuarios = [] } = useQuery<Usuario[]>({
+    queryKey: ['usuarios'],
+    queryFn: async () => {
+      try {
+        const resp = await api.get('/usuarios');
+        return resp.data;
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: demandasPai = [] } = useQuery<ProfissionalDemandaListItem[]>({
+    queryKey: ['demandas-pai'],
+    queryFn: async () => {
+      const resp = await api.get('/gestao-demandas');
+      return resp.data;
+    },
   });
 
   const { data, isLoading, error } = useQuery<ProfissionalDemandaListItem[]>({
     queryKey: ['demandas-list', filtros],
     queryFn: async () => {
-      const params = {
+      const params: Record<string, unknown> = {
         status: filtros.status || undefined,
         prioridade: filtros.prioridade || undefined,
         atrasadas: filtros.atrasadas || undefined,
         busca: filtros.busca || undefined,
+        responsavel_id: filtros.responsavel_id || undefined,
+        parent_demanda_id: filtros.parent_demanda_id || undefined,
       };
       const resp = await api.get('/gestao-demandas', { params });
       return resp.data;
@@ -42,6 +74,19 @@ export default function DemandasList() {
     const criticas = demandas.filter((item) => item.prioridade === 'critica').length;
     return { total, atrasadas, semResponsavel, criticas };
   }, [demandas]);
+
+  const temFiltrosAtivos =
+    filtros.status !== '' ||
+    filtros.prioridade !== '' ||
+    filtros.atrasadas ||
+    filtros.busca !== '' ||
+    filtros.responsavel_id !== '' ||
+    filtros.parent_demanda_id !== '';
+
+  const visualizandoSubdemandas = Boolean(filtros.parent_demanda_id);
+  const demandaPaiSelecionada = demandasPai.find(
+    (d) => String(d.id) === filtros.parent_demanda_id,
+  );
 
   return (
     <div className="demandas-module-page">
@@ -88,8 +133,13 @@ export default function DemandasList() {
         <div className="demandas-filter-topline">
           <div>
             <h3>Filtros rapidos</h3>
-            <p>Refine a lista por status, prioridade, atraso ou texto livre.</p>
+            <p>Refine a lista por responsavel, demanda, prioridade, status ou texto livre.</p>
           </div>
+          {temFiltrosAtivos && (
+            <button className="btn-secondary btn-sm" onClick={() => setFiltros(FILTROS_VAZIOS)}>
+              Limpar filtros
+            </button>
+          )}
         </div>
 
         <div className="demandas-filter-grid">
@@ -101,6 +151,36 @@ export default function DemandasList() {
               value={filtros.busca}
               onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
             />
+          </label>
+
+          <label className="form-row compact">
+            <span>Responsavel</span>
+            <select
+              value={filtros.responsavel_id}
+              onChange={(e) => setFiltros({ ...filtros, responsavel_id: e.target.value })}
+            >
+              <option value="">Todos os responsaveis</option>
+              {usuarios.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="form-row compact">
+            <span>Demanda</span>
+            <select
+              value={filtros.parent_demanda_id}
+              onChange={(e) => setFiltros({ ...filtros, parent_demanda_id: e.target.value })}
+            >
+              <option value="">Todas as demandas</option>
+              {demandasPai.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.codigo} — {d.titulo}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="form-row compact">
@@ -139,7 +219,7 @@ export default function DemandasList() {
               checked={filtros.atrasadas}
               onChange={(e) => setFiltros({ ...filtros, atrasadas: e.target.checked })}
             />
-            <span>Mostrar apenas demandas atrasadas</span>
+            <span>Apenas atrasadas</span>
           </label>
         </div>
       </section>
@@ -147,8 +227,16 @@ export default function DemandasList() {
       <section className="card demandas-table-card">
         <div className="demandas-table-head">
           <div>
-            <h3>Lista de demandas</h3>
-            <p>Selecione uma linha para abrir o detalhe completo.</p>
+            <h3>
+              {visualizandoSubdemandas && demandaPaiSelecionada
+                ? `Subdemandas de ${demandaPaiSelecionada.codigo}`
+                : 'Lista de demandas'}
+            </h3>
+            <p>
+              {visualizandoSubdemandas && demandaPaiSelecionada
+                ? demandaPaiSelecionada.titulo
+                : 'Selecione uma linha para abrir o detalhe completo.'}
+            </p>
           </div>
           <span className="demandas-table-count">{demandas.length} itens</span>
         </div>

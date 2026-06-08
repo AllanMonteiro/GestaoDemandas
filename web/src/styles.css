@@ -3121,6 +3121,13 @@ button:disabled {
   padding: 18px;
 }
 
+.demandas-filter-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .demandas-filter-topline h3,
 .demandas-table-head h3 {
   margin: 0 0 4px;
@@ -3134,9 +3141,15 @@ button:disabled {
 
 .demandas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) repeat(2, minmax(180px, 0.7fr)) minmax(220px, 0.9fr);
+  grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(180px, 0.85fr));
   gap: 12px;
   align-items: end;
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .demandas-toggle {
